@@ -1,0 +1,19 @@
+# 生成的表格、报告与压缩包一律不入库。
+# 这条同时是一道隐私防线：真实学生名册永远不该被提交到仓库。
+*.xls
+*.xlsx
+*.zip
+output/
+_生成报告.txt
+_校验报告.txt
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# 系统
+.DS_Store
+Thumbs.db
