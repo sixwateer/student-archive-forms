@@ -24,13 +24,14 @@ SIDE = Side(style="thin")
 BOX = Border(left=SIDE, right=SIDE, top=SIDE, bottom=SIDE)
 CENTER = Alignment(horizontal="center", vertical="center")
 
-# (学院, 培养层次, 班级, 班号, 人数)
+# (学院, 培养层次, 班级, 班号, 人数, 年级)
+# 刻意混合两个年级，方便试 --grade / --level / --college / --class 筛选
 CLASSES = [
-    ("示例理工学院", "普通本科", "计算机2026-1", "01", 5),
-    ("示例理工学院", "普通本科", "计算机2026-2", "02", 4),
-    ("示例理工学院", "专升本", "计算机(专升本)2026-1", "03", 3),
-    ("示例商学院", "普通本科", "会计(产业学院)2026-1", "04", 6),
-    ("示例商学院", "专升本", "会计(专升本)2026-1", "05", 3),
+    ("示例理工学院", "普通本科", "计算机2026-1", "01", 5, "2026级"),
+    ("示例理工学院", "普通本科", "计算机2025-1", "02", 4, "2025级"),
+    ("示例理工学院", "专升本", "计算机(专升本)2026-1", "03", 3, "2026级"),
+    ("示例商学院", "普通本科", "会计(产业学院)2026-1", "04", 6, "2026级"),
+    ("示例商学院", "专升本", "会计(专升本)2025-1", "05", 3, "2025级"),
 ]
 
 FOOTER = [
@@ -51,23 +52,24 @@ def make_roster():
     ws["A1"] = "示例学生名册（全部为虚构数据，仅用于演示）"
     ws["A1"].font = Font(name="宋体", size=12, bold=True)
 
-    cols = ["学号", "姓名", "培养层次", "上课院系", "班级", "班号"]
+    cols = ["学号", "姓名", "培养层次", "上课院系", "班级", "班号", "当前所在级", "入学年份"]
     for i, name in enumerate(cols, start=1):
         c = ws.cell(row=3, column=i, value=name)
         c.font = FONT
         c.alignment = CENTER
 
     row, sid = 4, 20260001
-    for college, level, cls, code, n in CLASSES:
+    for college, level, cls, code, n, grade in CLASSES:
         for _ in range(n):
-            values = [f"D{sid}", f"示例学生{sid - 20260000:02d}", level, college, cls, code]
+            values = [f"D{sid}", f"示例学生{sid - 20260000:02d}", level, college, cls, code,
+                      grade, grade.replace("级", "")]
             for i, v in enumerate(values, start=1):
                 c = ws.cell(row=row, column=i, value=v)
                 c.font = FONT
             sid += 1
             row += 1
 
-    for col, w in zip("ABCDEF", [14, 16, 12, 18, 26, 8]):
+    for col, w in zip("ABCDEFGH", [14, 16, 12, 18, 26, 8, 14, 12]):
         ws.column_dimensions[col].width = w
     wb.save(ROSTER)
     return row - 4
