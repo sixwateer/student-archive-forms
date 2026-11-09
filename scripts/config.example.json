@@ -1,0 +1,31 @@
+{
+  "_说明": "示例配置：先运行 python examples/make_demo.py 生成虚构数据，再直接用本文件试跑。正式使用时把 source/template/out 改成自己的路径；同名命令行参数可覆盖这里的值。",
+
+  "source": "./examples/示例学生名册.xlsx",
+  "template": "./examples/示例档案表模板.xlsx",
+  "out": "./output",
+
+  "header_row": 3,
+  "template_header_row": 1,
+  "template_data_row": 2,
+  "footer_gap": 3,
+
+  "group_mode": "college-level",
+  "id_column": "学号",
+  "name_column": "姓名",
+  "level_column": "培养层次",
+  "college_column": "上课院系",
+  "class_column": "班级",
+  "class_code_column": "班号",
+  "column_map": "",
+  "level_map": "普通本科=本科,专升本=专升本",
+
+  "name_prefix": "示例档案纸质表格",
+  "margin_cm": 2.0,
+  "note_width": 9.0,
+
+  "stats": true,
+  "zip_by_level": true,
+  "exclude": "",
+  "log": ""
+}
