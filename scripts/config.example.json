@@ -27,5 +27,14 @@
   "stats": true,
   "zip_by_level": true,
   "exclude": "",
+
+  "_筛选说明": "以下均可留空（=不筛）。年级写 2025 或 2025级；level 写层次显示名（本科/专升本，可逗号分隔）；college/class 可逗号分隔或 JSON 数组；exclude_ids 可写 @文件路径。",
+  "grade": "",
+  "grade_column": "",
+  "level": "",
+  "college": "",
+  "class": "",
+  "exclude_ids": "",
+
   "log": ""
 }
