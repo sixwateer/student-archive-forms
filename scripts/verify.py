@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import glob
 import io
+import json
 import os
 import zipfile
 
@@ -43,6 +44,8 @@ def main():
     ap.add_argument("--margin-cm", type=float, default=2.0)
     ap.add_argument("--footer-gap", type=int, default=3, help="与生成时保持一致")
     ap.add_argument("--include-zip", action="store_true", help="同时校验目录下的 zip 完整性")
+    ap.add_argument("--ignore-filter", action="store_true",
+                    help="忽略输出目录里的 _筛选条件.json，仍按 --source 的全量名册校验")
     ap.add_argument("--log", default="")
     a = ap.parse_args()
     rep = Report(a.log or os.path.join(a.out, "_校验报告.txt"))
@@ -53,6 +56,21 @@ def main():
 
 
 def run(a, rep):
+    # generate.py 若用了筛选，会写出 _筛选条件.json + 筛选后名册；
+    # 此时自动改按筛选后的学生核对，避免把「没生成的人」误报成缺失。
+    meta_path = os.path.join(a.out, "_筛选条件.json")
+    if not a.ignore_filter and os.path.isfile(meta_path):
+        try:
+            with io.open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            sub = meta.get("subset") or ""
+            if meta.get("enabled") and sub and os.path.isfile(sub):
+                rep("检测到筛选生成，改用筛选后名册校验:", sub)
+                rep("筛选条件:", "；".join(meta.get("conditions") or []))
+                a.source, a.header_row = sub, 1
+        except (ValueError, OSError, TypeError):
+            pass
+
     df = pd.read_excel(a.source, sheet_name=0, header=a.header_row - 1, dtype=object)
     df.columns = [str(c).strip() for c in df.columns]
     df = df[df[a.id_column].notna()].copy()
