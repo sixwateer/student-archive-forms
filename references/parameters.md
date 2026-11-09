@@ -26,7 +26,36 @@ python scripts/generate.py --config 我的配置.json --group-mode college --mar
 | `--stats` | 关 | 打印 学院×层次 人数与占比 |
 | `--zip-by-level` | 关 | 按层次后缀把生成文件打成 zip |
 | `--exclude` | 空 | 逗号分隔的层次显示名，跳过不生成 |
+| `--grade` | 空 | 年级，如 `2025` / `2025级`；自动识别年级列并筛数据，同时写进文件名 |
+| `--grade-column` | 自动探测 | 年级列名，可逗号分隔多列；默认依次找 `当前所在级 / 年级 / 入学年份 / 所在级` |
+| `--level` | 空 | 只保留的层次显示名（`本科` / `专升本` / `本科,专升本`）；留空 = 全部 |
+| `--college` | 空 | 只保留的学院，逗号分隔或 JSON 数组 |
+| `--class` | 空 | 只保留的班级，逗号分隔或 JSON 数组 |
+| `--exclude-ids` | 空 | 排除学号，逗号分隔或 `@文件路径`（每行一个） |
+| `--list-filters` | 关 | 只列出可筛选的年级/层次/学院/班级及人数，不生成文件 |
 | `--log` | `<out>/_生成报告.txt` | UTF-8 报告路径 |
+
+## 先筛选再生成
+
+所有筛选参数可叠加，顺序为：年级 → 层次 → 学院 → 班级 → 排除学号 → `--exclude`。每一步都在报告里写明剔除行数，最后给出「筛选后 N 人 / M 个班」。
+
+```bash
+# 先看名册里有什么
+python scripts/generate.py --source 名册.xls --header-row 3 --list-filters
+
+# 只要 2025 级本科
+python scripts/generate.py --config 我的配置.json --grade 2025 --level 本科
+
+# 只要某学院某几个班
+python scripts/generate.py --config 我的配置.json --college 商学院 --class '会计本2026-1,会计本2026-2'
+```
+
+- **年级**：`year4()` 从 `2025级 / 2025-09 / 2025` 里取 4 位年份；多个年级列取「任一命中」。名册无年级列时只用于命名，报告会提示。
+- **层次**：匹配 `--level-map` 映射后的显示名，也兼容原始值（`普通本科` 也能匹配 `--level 普通本科`）。写 `全部` / `all` 等价于不筛。
+- **学院 / 班级**：精确匹配去空格后的字符串；值里含逗号时用 JSON 数组，如 `--college '["A学院","B学院"]'`。
+- **配置文件**里对应的键是 `grade`、`grade_column`、`level`、`college`、`class`、`exclude_ids`（脚本内部映射到 `level_filter` 等 dest，无需关心）。
+- 筛选后写出 `_筛选条件.json` + `_筛选信息/筛选后名册.xlsx`（表头在第 1 行）。`verify.py` 读到前者会自动改用子集核对，无需改命令；`--ignore-filter` 可强制按全量名册校验。
+- 筛选后只剩一种层次时，`--stats` 的交叉表会自动补 0 列（历史 bug 已修），不会报 `KeyError`。
 
 ## 名册列映射
 
