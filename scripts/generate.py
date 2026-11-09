@@ -269,6 +269,73 @@ def parse_level_map(s):
     return out
 
 
+def split_values(v):
+    """把 'a,b' 或 '["a","b"]' 解析成去重后的字符串列表。"""
+    if not v:
+        return []
+    s = str(v).strip()
+    if s.startswith("["):
+        try:
+            items = json.loads(s)
+        except ValueError:
+            items = [s]
+    else:
+        items = s.split(",")
+    return list(dict.fromkeys(str(x).strip() for x in items if str(x).strip()))
+
+
+def year4(v):
+    """从 2026级 / 2026-09 / '2026' 等写法里取 4 位年份。"""
+    m = re.search(r"(20\d{2})", str(v or ""))
+    return m.group(1) if m else ""
+
+
+def grade_columns(df, spec):
+    """确定年级列：显式指定优先，否则自动探测常见列名（可多列）。"""
+    if spec:
+        return [c.strip() for c in str(spec).split(",")
+                if c.strip() and c.strip() in df.columns]
+    return [c for c in ("当前所在级", "年级", "入学年份", "所在级") if c in df.columns]
+
+
+def show_filters(args):
+    """--list-filters：列出名册里可筛选的取值与人数，不生成任何文件。"""
+    df = pd.read_excel(args.source, sheet_name=0, header=args.header_row - 1, dtype=object)
+    df.columns = [str(c).strip() for c in df.columns]
+    df = df[df[args.id_column].notna()].copy()
+    lmap = parse_level_map(args.level_map)
+    print("名册:", args.source)
+    print("总人数:", len(df))
+
+    gcols = grade_columns(df, args.grade_column)
+    if gcols:
+        gs = defaultdict(int)
+        for c in gcols:
+            for v in df[c]:
+                y = year4(v)
+                if y:
+                    gs[y] += 1
+        print("\n年级列:", "、".join(gcols))
+        for k in sorted(gs):
+            print("  %s级  %d 人次" % (k, gs[k]))
+    else:
+        print("\n年级列: 未找到（--grade 将只用于文件命名，不筛数据）")
+
+    def show(title, series):
+        print("\n" + title + ":")
+        for k, v in series.value_counts().items():
+            print("  %s  %d 人" % (k, int(v)))
+
+    if args.level_column in df.columns:
+        show("培养层次（--level 用显示名）",
+             df[args.level_column].astype(str).str.strip().map(lambda v: lmap.get(v, v)))
+    if args.college_column in df.columns:
+        show("学院（--college）", df[args.college_column].astype(str).str.strip())
+    if args.class_column in df.columns:
+        show("班级（--class）", df[args.class_column].astype(str).str.strip())
+    print("\n示例: --grade 2025 --level 本科 --college 商学院 --class '会计2025-1'")
+
+
 def build_parser():
     p = argparse.ArgumentParser(description="学生档案纸质表生成器", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument("--config", help="JSON 配置文件，里面同名字段作为默认值；命令行参数可覆盖")
@@ -295,6 +362,20 @@ def build_parser():
     p.add_argument("--stats", action="store_true", help="输出 学院×层次 人数与占比统计")
     p.add_argument("--zip-by-level", action="store_true", help="按层次把生成的文件打成 zip（配合 college-level 模式）")
     p.add_argument("--exclude", default="", help="逗号分隔的层次显示名，生成时跳过")
+    p.add_argument("--grade", default="", dest="grade",
+                   help="年级，如 2025 或 2025级；名册有年级列时按该年级筛数据，并自动写进文件名")
+    p.add_argument("--grade-column", default="", dest="grade_column",
+                   help="年级列名，逗号分隔可写多个；留空自动探测 当前所在级/年级/入学年份")
+    p.add_argument("--level", default="", dest="level_filter",
+                   help="只保留的层次显示名，逗号分隔，如 本科 / 专升本 / 本科,专升本；留空=全部")
+    p.add_argument("--college", default="", dest="college_filter",
+                   help="只保留的学院，逗号分隔或 JSON 数组；留空=全部")
+    p.add_argument("--class", default="", dest="class_filter",
+                   help="只保留的班级，逗号分隔或 JSON 数组；留空=全部")
+    p.add_argument("--exclude-ids", default="", dest="exclude_ids",
+                   help="排除的学号，逗号分隔；也可写 @文件路径（每行一个学号）")
+    p.add_argument("--list-filters", action="store_true", dest="list_filters",
+                   help="只列出名册里可筛选的年级/层次/学院/班级及人数，不生成文件")
     p.add_argument("--log", default="", help="报告文件路径；默认 <out>/_生成报告.txt")
     return p
 
@@ -308,9 +389,19 @@ def main():
     if known.config:
         with io.open(known.config, "r", encoding="utf-8") as f:
             cfg = json.load(f)
+        # 配置文件里用更自然的键名 level / college / class，映射到 argparse 的 dest
+        alias = {"level": "level_filter", "college": "college_filter",
+                 "class": "class_filter"}
+        cfg = {alias.get(k, k): v for k, v in cfg.items()}
         valid = {a.dest for a in parser._actions}
         parser.set_defaults(**{k: v for k, v in cfg.items() if k in valid})
     args = parser.parse_args()
+    # --list-filters 只需名册，不需要模板与输出目录
+    if args.list_filters:
+        if not args.source:
+            parser.error("缺少 --source（也可在 --config 的 JSON 里提供）")
+        show_filters(args)
+        return
     for key in ("source", "template", "out"):
         if not getattr(args, key):
             parser.error(f"缺少 --{key}（也可在 --config 的 JSON 里提供）")
@@ -378,6 +469,81 @@ def run(args, rep):
     df = df.sort_values(by=["_lv_order", "_college", "_code", "_id", "_cls"], kind="stable")
 
     rep("层次取值:", {k: int(v) for k, v in df["_level"].value_counts().items()})
+
+    # ---- 先筛选，再生成 ----
+    conditions = []
+    g4 = year4(args.grade)
+    gcols = grade_columns(df, args.grade_column)
+    if g4:
+        conditions.append("年级=%s级" % g4)
+        if gcols:
+            mask = pd.Series(False, index=df.index)
+            for c in gcols:
+                mask |= df[c].map(year4).eq(g4)
+            before = len(df)
+            df = df[mask].copy()
+            rep("按年级筛选:", g4, "级 | 年级列:", gcols, f"| 剔除 {before-len(df)} 行")
+        else:
+            rep("按年级筛选:", g4, "级 | ⚠ 名册无年级列，只用于命名，不筛数据")
+
+    lv_keep = split_values(args.level_filter)
+    if lv_keep and not any(x in ("全部", "all", "ALL") for x in lv_keep):
+        conditions.append("层次=" + "/".join(lv_keep))
+        before = len(df)
+        raw_lv = df[args.level_column].astype(str).str.strip()
+        df = df[df["_level"].isin(lv_keep) | raw_lv.isin(lv_keep)].copy()
+        rep("按层次筛选:", lv_keep, f"| 剔除 {before-len(df)} 行")
+
+    col_keep = split_values(args.college_filter)
+    if col_keep:
+        conditions.append("学院=" + "/".join(col_keep))
+        before = len(df)
+        df = df[df["_college"].isin(col_keep)].copy()
+        rep("按学院筛选:", col_keep, f"| 剔除 {before-len(df)} 行")
+
+    cls_keep = split_values(args.class_filter)
+    if cls_keep:
+        conditions.append("班级=" + "/".join(cls_keep))
+        before = len(df)
+        df = df[df["_cls"].isin(cls_keep)].copy()
+        rep("按班级筛选:", cls_keep, f"| 剔除 {before-len(df)} 行")
+
+    ex_ids = split_values(args.exclude_ids)
+    if str(args.exclude_ids).strip().startswith("@"):
+        fp = str(args.exclude_ids).strip()[1:]
+        with io.open(fp, "r", encoding="utf-8-sig") as f:
+            ex_ids = [x.strip() for x in f.read().splitlines() if x.strip()]
+    if ex_ids:
+        conditions.append("排除学号=%d个" % len(ex_ids))
+        before = len(df)
+        df = df[~df["_id"].isin(set(ex_ids))].copy()
+        rep("排除学号:", len(ex_ids), f"个 | 剔除 {before-len(df)} 行")
+
+    if conditions:
+        rep("筛选条件:", "；".join(conditions))
+        rep("筛选后:", len(df), "人 |", df["_cls"].nunique(), "个班")
+    if df.empty:
+        raise ValueError("筛选后没有学生，请放宽 --grade / --level / --college / --class 条件。")
+
+    # 把筛选结果落盘，供 verify.py 自动按同一批学生核对（放在子目录，避免被当成成果文件）
+    meta = {
+        "enabled": bool(conditions),
+        "conditions": conditions,
+        "source": args.source,
+        "header_row": 1,
+        "subset": "",
+        "created_by": "generate.py",
+    }
+    if conditions:
+        sub_dir = os.path.join(args.out, "_筛选信息")
+        os.makedirs(sub_dir, exist_ok=True)
+        sub_path = os.path.join(sub_dir, "筛选后名册.xlsx")
+        df.drop(columns=[c for c in df.columns if c.startswith("_")]).to_excel(sub_path, index=False)
+        meta["subset"] = sub_path
+        rep("已保存筛选后名册:", sub_path, "（校验会自动使用它）")
+    with io.open(os.path.join(args.out, "_筛选条件.json"), "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
     if args.exclude:
         skip = set(x.strip() for x in args.exclude.split(","))
         before = len(df)
@@ -401,7 +567,8 @@ def run(args, rep):
         (total_units, total_units * UNIT_CM, max_units * UNIT_CM,
          "100%比例可容纳" if total_units <= max_units else "将缩印"))
 
-    prefix = args.name_prefix or os.path.splitext(os.path.basename(args.source))[0]
+    prefix = (args.name_prefix or (f"{g4}级档案纸质表格" if g4 else "")
+              or os.path.splitext(os.path.basename(args.source))[0])
     groups = make_groups(df, args.group_mode, prefix)
 
     made = []
@@ -443,15 +610,19 @@ def run(args, rep):
     if args.stats:
         rep("\n### 学院 × 层次 人数统计")
         ct = pd.crosstab(df["_college"], df["_level"])
-        ct["合计"] = ct.sum(axis=1)
+        # 筛选/排除后可能只剩一种层次，把缺失的层次补成 0 列，避免 KeyError
+        for lv in level_order:
+            if lv not in ct.columns:
+                ct[lv] = 0
+        ct["合计"] = ct[level_order].sum(axis=1)
         ct = ct.sort_values("合计", ascending=False)
         grand = ct["合计"].sum()
         rep(f"{'学院':<14}" + "".join(f"{lv:>10}" for lv in level_order) + f"{'合计':>10}{'占全校':>9}")
         for idx, r in ct.iterrows():
             rep(f"{idx:<14}" + "".join(f"{int(r[lv]):>10}" for lv in level_order) +
-                f"{int(r['合计']):>10}{r['合计']/grand*100:>8.1f}%")
+                f"{int(r['合计']):>10}{(r['合计']/grand*100 if grand else 0):>8.1f}%")
         rep(f"{'全校':<14}" + "".join(f"{int(ct[lv].sum()):>10}" for lv in level_order) +
-            f"{int(grand):>10}{100.0:>8.1f}%")
+            f"{int(grand):>10}{(100.0 if grand else 0):>8.1f}%")
 
     if args.zip_by_level:
         for lv in level_order:
