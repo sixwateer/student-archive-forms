@@ -162,6 +162,25 @@ summary{cursor:pointer;font-size:15px;color:#2563eb;font-weight:bold;padding:6px
     </div>
   </div>
 
+  <div class="card" id="mergeCard">
+    <div class="step">
+      <div class="n">＋</div>
+      <div style="flex:1">
+        <div class="t">合并已有成果（把分散的学院 zip / xlsx 合成一个大 ZIP）</div>
+        <div class="d">已经生成了按学院拆开的多个 <b>.xlsx</b>，或「本科(9学院).zip」「专升本(8学院).zip」？把它们一起选进来，一键合成一个 <b>档案表成果-合并全部.zip</b>，直接发给别人，对方解压就能拿到全部表格。</div>
+        <div class="drop" id="mergeDrop">
+          <b>点这里选择要合并的文件</b>
+          <span>可多选：.xlsx 表格 或 .zip（里面装的学院表格都会展开收进来）；也可以直接拖进来</span>
+        </div>
+        <input type="file" id="mergeFile" accept=".xlsx,.zip" multiple>
+        <div class="list" id="mergeList" style="display:none"></div>
+        <label class="f" style="margin-top:12px"><input type="checkbox" id="mergeRep" checked> 同时把报告（_生成报告.txt / _校验报告.txt）也收进大 ZIP</label>
+        <button class="big2" id="mergeGo" disabled>合并成一个大 ZIP 并下载</button>
+        <div class="msg" id="mergeMsg"></div>
+      </div>
+    </div>
+  </div>
+
   <div class="q"><b>Q：下载后怎么打印？</b><br>打开下载到的 Excel → 按 <b>Ctrl + P</b> → 打印范围选「<b>整个工作簿</b>」，一次打完里面所有班级。选「活动工作表」只打当前班级。</div>
   <div class="q"><b>Q：点了没反应 / 没下载？</b><br>① 看浏览器右上角有没有提示「已阻止下载」，点「保留」；② 换 Edge 或 Chrome 打开这个文件；③ 关掉浏览器的「下载前询问保存位置」后重试。文件默认在「下载」文件夹里。</div>
   <div class="q"><b>Q：表格里「是否存档」「备注」为什么是空的？</b><br>这两列是留给现场手写打勾的，故意留空。底部「应收 / 实收 / 接收人…」也保持模板原文。</div>
@@ -548,11 +567,82 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
   }
 
+  // —— 合并：把分散的学院 zip / xlsx 合成一个大 ZIP（浏览器 / Node 通用）——
+  // 从一个输入（xlsx 或 zip）收集表格/报告条目，返回 [{name, data, isReport}]
+  async function collectEntries(name, buf) {
+    var low = String(name || '').toLowerCase();
+    if (low.endsWith('.zip')) {
+      var out = [];
+      var z = await JSZip.loadAsync(buf);
+      z.forEach(function (rel, file) {
+        if (file.dir) return;
+        var l = rel.toLowerCase();
+        if (l.endsWith('.xlsx') || l.endsWith('.txt')) {
+          out.push({ rel: rel, file: file, report: l.endsWith('.txt') });
+        }
+      });
+      var entries = [];
+      for (var i = 0; i < out.length; i++) {
+        var data = await out[i].file.async('arraybuffer');
+        entries.push({ name: out[i].rel, data: data, isReport: out[i].report });
+      }
+      return entries;
+    }
+    if (low.endsWith('.xlsx')) return [{ name: name, data: buf, isReport: false }];
+    if (low.endsWith('.txt')) return [{ name: name, data: buf, isReport: true }];
+    return [];
+  }
+
+  // inputs: [{name, buffer}]（buffer 为 ArrayBuffer）；把里面的表格展平收进一个大 ZIP
+  async function mergeZip(inputs, opts) {
+    opts = opts || {};
+    var includeReports = opts.includeReports !== false;
+    var used = {}, manifest = [], big = new JSZip();
+    var nXlsx = 0, nRep = 0, collisions = 0;
+
+    for (var i = 0; i < inputs.length; i++) {
+      var srcName = inputs[i].name;
+      var stem = srcName.replace(/\.[^.]+$/, '');
+      var ents;
+      try { ents = await collectEntries(srcName, inputs[i].buffer); }
+      catch (e) { ents = []; }  // 不是合法 zip 等，跳过并提示
+      for (var j = 0; j < ents.length; j++) {
+        var e = ents[j];
+        if (e.isReport && !includeReports) continue;
+        var base = String(e.name).split('/').pop();
+        var final = base;
+        if (used[final]) {
+          collisions++;
+          final = stem + '__' + base;
+          var k = 2;
+          while (used[final]) { final = stem + '__' + base + '(' + k + ')'; k++; }
+        }
+        used[final] = 1;
+        big.file(final, e.data);
+        if (e.isReport) nRep++; else nXlsx++;
+        manifest.push(final + ' | ' + srcName + ' › ' + e.name + ' | ' + e.data.byteLength + ' 字节');
+      }
+    }
+    if (!nXlsx && !nRep) throw new Error('没从所选文件里读出任何表格（.xlsx）。请确认选的是生成的档案表或学院 zip。');
+
+    var lines = ['档案表成果合并清单', '='.repeat(40),
+      '来源文件数：' + inputs.length,
+      '表格文件：' + nXlsx + ' 个',
+      '报告文件：' + nRep + ' 个',
+      '重名已处理：' + collisions + ' 处', '-'.repeat(40),
+      '文件名 | 来源 | 大小'];
+    lines = lines.concat(manifest);
+    big.file('_合并清单.txt', lines.join('\n') + '\n');
+
+    var buffer = await big.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
+    return { buffer: buffer, nXlsx: nXlsx, nReports: nRep, collisions: collisions };
+  }
+
   root.ArchiveCore = {
     HEADER: HEADER, FOOTER: FOOTER,
     parseRoster: parseRoster, options: options, filterRows: filterRows,
     groupRows: groupRows, build: build, buildZip: buildZip,
-    glCount: glCount,
+    glCount: glCount, mergeZip: mergeZip, collectEntries: collectEntries,
     s: s, year4: year4
   };
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -565,13 +655,25 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   function msg(id, cls, text){ var e=$(id); e.className='msg '+(cls||''); e.textContent=text; }
 
-  function download(name, buf){
+  function download(name, buf, mount){
     var blob = new Blob([buf], {type:'application/octet-stream'});
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href=url; a.download=name; a.style.display='none';
     document.body.appendChild(a); a.click();
-    setTimeout(function(){ URL.revokeObjectURL(url); if(a.parentNode)a.parentNode.removeChild(a); }, 5000);
+    // 兜底：file:// 本地打开或浏览器拦截自动下载时，显示一个可手动点击的链接
+    try{
+      var fb=document.createElement('div');
+      fb.style.cssText='margin-top:12px;padding:11px 13px;border:1px dashed #2563eb;border-radius:9px;background:#eff6ff;font-size:14px;line-height:1.7';
+      var link=document.createElement('a');
+      link.href=url; link.download=name;
+      link.textContent='👉 如果没自动下载，点这里手动保存「'+name+'」';
+      link.style.cssText='color:#1d4ed8;font-weight:bold';
+      fb.appendChild(link);
+      (mount||document.body).appendChild(fb);
+      setTimeout(function(){ if(fb.parentNode)fb.parentNode.removeChild(fb); }, 120000);
+    }catch(e){}
+    setTimeout(function(){ URL.revokeObjectURL(url); if(a.parentNode)a.parentNode.removeChild(a); }, 60000);
   }
 
   function optHtml(v, label){ return '<option value="'+v+'">'+label+'</option>'; }
@@ -698,6 +800,49 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
   });
 
+  // —— 合并已有成果 ——
+  var MERGE_FILES = [];
+  function readAB(file){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(r.result);};r.onerror=rej;r.readAsArrayBuffer(file);});}
+  function renderMergeList(){
+    var box=$('mergeList'); box.style.display=MERGE_FILES.length?'block':'none'; box.innerHTML='';
+    MERGE_FILES.forEach(function(f){
+      var l=document.createElement('label');
+      var cb=document.createElement('input'); cb.type='checkbox'; cb.checked=true; cb.dataset.n=f.name;
+      cb.onchange=function(){ if(!cb.checked){ MERGE_FILES=MERGE_FILES.filter(function(x){return x.name!==f.name;}); renderMergeList(); } };
+      var sp=document.createElement('span'); sp.textContent=f.name;
+      l.appendChild(cb); l.appendChild(sp); box.appendChild(l);
+    });
+    $('mergeGo').disabled = (!MERGE_FILES.length);
+  }
+  async function pickMerge(files){
+    for (var i=0;i<files.length;i++){
+      if(MERGE_FILES.some(function(x){return x.name===files[i].name;})) continue;
+      MERGE_FILES.push({name:files[i].name, buffer:await readAB(files[i])});
+    }
+    renderMergeList();
+  }
+  $('mergeDrop').onclick=function(){$('mergeFile').click();};
+  $('mergeFile').onchange=function(e){ if(e.target.files.length) pickMerge(e.target.files); e.target.value=''; };
+  ['dragover','dragenter'].forEach(function(ev){ $('mergeDrop').addEventListener(ev,function(e){e.preventDefault();this.style.background='#eff6ff';}); });
+  $('mergeDrop').addEventListener('dragleave',function(e){e.preventDefault();this.style.background='#f8fafc';});
+  $('mergeDrop').addEventListener('drop',function(e){
+    e.preventDefault(); this.style.background='#f8fafc';
+    if(e.dataTransfer.files.length) pickMerge(e.dataTransfer.files);
+  });
+  $('mergeGo').onclick=async function(){
+    if(!MERGE_FILES.length) return;
+    this.disabled=true;
+    msg('mergeMsg','busy','正在读取并合并，请稍候…');
+    try{
+      var r=await C.mergeZip(MERGE_FILES, {includeReports:$('mergeRep').checked});
+      download('档案表成果-合并全部.zip', r.buffer, $('mergeCard'));
+      msg('mergeMsg','ok','✅ 合并完成！共收进 '+r.nXlsx+' 个表格文件'+(r.nReports?('、'+r.nReports+' 个报告'):'')+
+        (r.collisions?('，处理了 '+r.collisions+' 处重名'):'')+'，已开始下载「档案表成果-合并全部.zip」。若浏览器提示「已阻止下载」，请点「保留」。');
+    }catch(err){
+      msg('mergeMsg','err','合并失败：'+err.message+'　请把这段提示发给管理员。');
+    }finally{ this.disabled=false; }
+  };
+
   $('go').onclick=async function(){
     if(!ROWS) return;
     $('go').disabled=true;
@@ -716,8 +861,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       }else{
         name=prefix+'-成果.zip'; buf=await C.buildZip(res.files);
       }
-      download(name, buf);
-      msg('gos','ok','✅ 生成完成！共 '+res.picked+' 人 / '+Object.keys(res.classes).length+' 个班，已开始下载「'+name+'」。 如果浏览器提示「已阻止下载」，请点「保留」。文件一般在「下载」文件夹里。');
+      download(name, buf, $('goCard'));
+      msg('gos','ok','✅ 生成完成！共 '+res.picked+' 人 / '+Object.keys(res.classes).length+' 个班，已开始下载「'+name+'」（里面已经分好、包含全部班级文件）。 如果浏览器提示「已阻止下载」，请点「保留」；若没自动下载，用按钮下方的手动链接保存。文件一般在「下载」文件夹里。');
     }catch(err){
       msg('gos','err','生成失败：'+err.message+'　请把这段提示发给管理员。');
     }finally{
