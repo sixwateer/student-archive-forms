@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>学生档案表生成器 · 操作指引</title>
+<style>
+  :root{--ink:#0f172a;--sub:#475569;--line:#e2e8f0;--key:#1d4ed8;--ok:#15803d;--warn:#b45309;--bg:#f6f8fc}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.75 -apple-system,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif}
+  .wrap{max-width:900px;margin:0 auto;padding:28px 18px 60px}
+  header{background:#fff;border:1px solid var(--line);border-radius:16px;padding:26px 28px;
+    box-shadow:0 6px 24px rgba(15,23,42,.05)}
+  h1{margin:0 0 8px;font-size:26px;letter-spacing:.3px}
+  .lead{margin:0;color:var(--sub);font-size:15px}
+  .tag{display:inline-block;background:#eff6ff;color:var(--key);border:1px solid #bfdbfe;
+    border-radius:999px;padding:2px 10px;font-size:12.5px;margin-right:6px}
+  section{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;margin-top:16px;
+    box-shadow:0 3px 14px rgba(15,23,42,.04)}
+  h2{margin:0 0 10px;font-size:19px;display:flex;align-items:center;gap:9px}
+  h2 .n{display:inline-flex;width:26px;height:26px;border-radius:8px;background:var(--key);color:#fff;
+    font-size:14px;align-items:center;justify-content:center;flex:0 0 auto}
+  ol,ul{margin:8px 0 0;padding-left:22px}
+  li{margin:5px 0}
+  b{color:#111827}
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:15px}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:#f1f5f9;font-weight:600;white-space:nowrap}
+  code{background:#f1f5f9;border-radius:5px;padding:1px 5px;font-size:14px}
+  .note{margin-top:12px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;
+    border-radius:10px;padding:11px 14px;font-size:14.5px}
+  .ok{color:var(--ok)} .warn{color:var(--warn)}
+  .kbd{display:inline-block;border:1px solid #cbd5e1;border-bottom-width:2px;border-radius:6px;
+    padding:0 6px;background:#f8fafc;font-size:13.5px}
+  footer{color:#64748b;font-size:13.5px;text-align:center;margin-top:26px}
+  @media print{body{background:#fff}section,header{box-shadow:none;break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>学生档案表生成器 · 操作指引</h1>
+    <p class="lead">把教务处导出的学生名册，变成<b>可以直接拿去打印</b>的分班档案表。</p>
+    <p style="margin:12px 0 0">
+      <span class="tag">网页版：双击 HTML，零安装</span>
+      <span class="tag">exe 版：双击 exe，自动开浏览器</span>
+      <span class="tag">两者结果完全一样</span>
+    </p>
+  </header>
+
+  <section>
+    <h2><span class="n">1</span>三步上手</h2>
+    <ol>
+      <li><b>选名册</b>：第 1 步选 <code>学生基本信息.xls/.xlsx</code>。稍等自动读取，并出现「名册自检」。</li>
+      <li><b>挑数据</b>：默认全校都出。想只整理某一届 / 只要本科 / 只挑几个学院班级，在下面勾一勾。</li>
+      <li><b>生成</b>：看实时统计（已选 X 人 / Y 个班 / 将生成 Z 个文件）→ 点绿色「开始生成」→ 等几秒自动下载。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span>四个筛选条件（可叠加）</h2>
+    <table>
+      <tr><th>条件</th><th>作用</th><th>小技巧</th></tr>
+      <tr><td><b>年级</b></td>
+          <td>选「2025级」= 入学年份/届别为 2025；选「全部年级」只按下面条件筛</td>
+          <td>下拉只列名册里真实存在的年份</td></tr>
+      <tr><td><b>层次</b></td><td>本科 / 专升本（专科）/ 一起出</td><td>专升本就是平时说的专科</td></tr>
+      <tr><td><b>学院</b></td><td>勾选要出的学院</td><td>搜索框输入关键字（如「计算机」）秒搜，出现「全选匹配」一键勾上</td></tr>
+      <tr><td><b>班级</b></td><td>勾选要出的班级</td><td>搜索框输入关键字（如「机器人」「会计」）秒搜，出现「全选匹配项」一键勾上</td></tr>
+    </table>
+    <div class="note"><b>重要联动：</b>选了「年级 / 层次」后，符合条件的班级会<b>自动勾选</b>、其余置灰；想手动加回直接勾上即可。切换年级/层次会实时刷新学院人数和班级人数。</div>
+  </section>
+
+  <section>
+    <h2><span class="n">3</span>搜索怎么用（定位「机器人」这类班级）</h2>
+    <ol>
+      <li>在<b>班级</b>搜索框输入关键字（班级名里的字，不是学号），如「机器人」。</li>
+      <li>列表立刻只剩匹配项，第一个匹配会被<b>黄底高亮</b>并自动滚到可见位置。</li>
+      <li>点「<b>全选匹配项</b>」一键把搜到的班级全勾上；「清空匹配项」反选。</li>
+      <li>学院搜索框同理，用来在几十个学院里快速定位。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="n">4</span>名册自检（读取后自动出现）</h2>
+    <ul>
+      <li><b class="warn">红字</b>：必须先修名册才能生成（如重复学号，会导致人数偏多、同一人出多张表）。</li>
+      <li><b class="warn">黄字</b>：提醒（如某些单元格为空）。</li>
+      <li><b class="ok">绿字</b>：可放心生成。</li>
+    </ul>
+    <p style="margin:8px 0 0;color:#475569">建议每次生成前看一眼自检结果。</p>
+  </section>
+
+  <section>
+    <h2><span class="n">5</span>高级设置（一般不用改）</h2>
+    <ul>
+      <li><b>预设模板</b>：点一下套用最常用场景 —— 本科·按学院分、专升本·按学院分、全部·按层次分、全部·只按学院分、全部班级一个文件。</li>
+      <li>分组方式、文件名前缀、排除个别学号、更换模板文件，按需调整。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="n">6</span>合并发给别人</h2>
+    <p style="margin:6px 0 0">已经生成了按学院拆开的多个 <code>.xlsx</code> 或「本科(9学院).zip」「专升本(8学院).zip」？</p>
+    <p style="margin:6px 0 0">拉到界面最下面「<b>合并成一个大 ZIP</b>」，一键合成一个 <code>档案表成果-合并全部.zip</code>，整体发出去，对方解压就能拿到全部表格。</p>
+  </section>
+
+  <section>
+    <h2><span class="n">7</span>打印</h2>
+    <p style="margin:6px 0 0">打开下载到的 Excel → <span class="kbd">Ctrl</span> + <span class="kbd">P</span> → 打印范围选「<b>整个工作簿</b>」，一次打完里面所有班级（选「活动工作表」只打当前班级）。</p>
+    <p style="margin:6px 0 0">表格已设好 A4、四边 2 厘米、每页重复表头，直接打印即可。</p>
+  </section>
+
+  <section>
+    <h2><span class="n">8</span>常见问题</h2>
+    <ul>
+      <li><b>双击 exe 没反应 / 被 Windows 拦</b>：点界面顶部「用网页版」链接；或直接用 Edge / Chrome 打开网页版 HTML。</li>
+      <li><b>双击网页版用记事本打开了</b>：右键文件 →「打开方式」→ 选 Edge / Chrome。</li>
+      <li><b>浏览器没自动下载</b>：看右上角「已阻止下载」点「保留」；或点页面里的「手动保存」链接。</li>
+      <li><b>选了年级却没勾班级</b>：说明该年级下没有班级（或名册年级列是空的），看「名册自检」提示。</li>
+      <li><b>搜索找不到班级</b>：关键字要是班级名里的字（如「机器人」「会计」），不是学号；搜到后点「全选匹配项」。</li>
+      <li><b>数据会不会上传</b>：不会。网页版全程不联网；exe 版只在你本机运行。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="n">9</span>环境要求</h2>
+    <ul>
+      <li><b>网页版</b>：任意现代浏览器（Edge / Chrome / 360 / QQ），无需安装、无需网络。</li>
+      <li><b>exe 版</b>：Windows；若被杀软拦截，优先改用网页版。</li>
+      <li><b>名册</b>：教务处导出的 Excel，需含「学号、姓名、班级、上课院系、培养层次」列；按届别筛请含「入学年份」列。</li>
+    </ul>
+  </section>
+
+  <footer>学生档案表生成器 · 操作指引　｜　本页可离线打开，也可直接打印</footer>
+</div>
+</body>
+</html>
