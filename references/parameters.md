@@ -22,6 +22,7 @@ python scripts/generate.py --config 我的配置.json --group-mode college --mar
 | `--group-mode` | `college-level` | 见下表 |
 | `--name-prefix` | 名册文件名 | 输出文件名前缀 |
 | `--margin-cm` | 2.0 | A4 四周边距；可打印宽度 = 21 − 2×边距 |
+| `--border-style` | `thin` | 表格实线：`thin` 全细黑线（默认，外框与内线一致）；`medium`/`thick` 外框加粗；`none` 沿用模板边框 |
 | `--note-width` | 9.0 | 备注列目标宽度（列宽单位），有富余时才放宽 |
 | `--stats` | 关 | 打印 学院×层次 人数与占比 |
 | `--zip-by-level` | 关 | 按层次后缀把生成文件打成 zip |

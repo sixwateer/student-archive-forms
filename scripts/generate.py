@@ -21,7 +21,7 @@ from copy import copy
 
 import pandas as pd
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, Border, Font, Side
+from openpyxl.styles import Alignment, Border, Color, Font, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.properties import PageSetupProperties
 
@@ -98,9 +98,37 @@ def cell_style(cell):
     }
 
 
+BLACK = "FF000000"
+
+
+def _b_side(style):
+    """实线边；颜色固定为黑（模板里的 auto 色在部分 Excel/WPS 与打印驱动下会不可见）。"""
+    if not style or style == "none":
+        return Side()
+    return Side(style=style, color=Color(rgb=BLACK))
+
+
 def thin_box():
-    s = Side(style="thin")
+    s = _b_side("thin")
     return Border(left=s, right=s, top=s, bottom=s)
+
+
+def apply_borders(ws, ncols, first_row, last_row, inner="thin", frame="medium"):
+    """给矩形区域画实线：内部细黑线 + 外框加粗黑线，保证打印出来看得见。
+
+    inner / frame 取 thin|medium|thick|none；none 表示不画。
+    """
+    if (not inner or inner == "none") and (not frame or frame == "none"):
+        return
+    for r in range(first_row, last_row + 1):
+        for c in range(1, ncols + 1):
+            cell = ws.cell(row=r, column=c)
+            cell.border = Border(
+                left=_b_side(frame if c == 1 else inner),
+                right=_b_side(frame if c == ncols else inner),
+                top=_b_side(frame if r == first_row else inner),
+                bottom=_b_side(frame if r == last_row else inner),
+            )
 
 
 def split_footer_rows(raw, min_gap):
@@ -217,7 +245,7 @@ def set_a4(ws, ncols, last_row, margin_cm):
     ws.sheet_view.zoomScale = 100
 
 
-def build_sheet(wb, sheet_name, rows, tpl, widths, margin_cm, used_names):
+def build_sheet(wb, sheet_name, rows, tpl, widths, margin_cm, used_names, border="thin"):
     ws = wb.create_sheet(safe_sheet_name(sheet_name, used_names))
     header = tpl["header"]
     for i, w in enumerate(widths, start=1):
@@ -240,6 +268,14 @@ def build_sheet(wb, sheet_name, rows, tpl, widths, margin_cm, used_names):
         apply_style(cell, tpl["footer_style"])
         max_off = max(max_off, off)
     last_row = last_data_row + 1 + max_off if tpl["footer"] else last_data_row
+
+    # 只为「表头 + 学生行」画实线（外框加粗）；页脚签名区按需求留白、不画线
+    inner = "thin" if border in ("medium", "thick") else border
+    apply_borders(ws, len(header), 1, last_data_row, inner=inner, frame=border)
+    for r in range(last_data_row + 1, last_row + 1):
+        for c in range(1, len(header) + 1):
+            ws.cell(row=r, column=c).border = Border()
+
     set_a4(ws, len(header), last_row, margin_cm)
     return ws
 
@@ -358,6 +394,10 @@ def build_parser():
     p.add_argument("--level-map", default="普通本科=本科,专升本=专升本", help='培养层次重命名，逗号分隔')
     p.add_argument("--name-prefix", default="", help="输出文件名前缀；默认用名册文件名")
     p.add_argument("--margin-cm", type=float, default=2.0, help="A4 四周边距（cm）")
+    p.add_argument("--border-style", default="thin", dest="border_style",
+                   choices=["none", "thin", "medium", "thick"],
+                   help="表格实线样式：thin=全细黑线（默认，外框与内线一致）；"
+                        "medium/thick=外框加粗；none=沿用模板原有边框")
     p.add_argument("--note-width", type=float, default=9.0, help="备注列目标宽度（列宽单位）")
     p.add_argument("--stats", action="store_true", help="输出 学院×层次 人数与占比统计")
     p.add_argument("--zip-by-level", action="store_true", help="按层次把生成的文件打成 zip（配合 college-level 模式）")
@@ -595,7 +635,8 @@ def run(args, rep):
                     else:
                         row.append(rec.get(src))
                 rows.append(row)
-            build_sheet(wb, cls, rows, tpl, widths, args.margin_cm, used)
+            build_sheet(wb, cls, rows, tpl, widths, args.margin_cm, used,
+                        border=args.border_style)
             total_rows += len(rows)
             total_sheets += 1
         path = os.path.join(args.out, fname)
