@@ -39,6 +39,8 @@ select,input.search{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border
 .list label{display:flex;align-items:center;gap:8px;font-size:14px;padding:4px 2px;cursor:pointer;color:#334155}
 .mini{font-size:12.5px;color:#2563eb;cursor:pointer;margin-left:8px;font-weight:normal}
 .mini:hover{text-decoration:underline}
+.dim{opacity:.45}
+.hint{background:#eff6ff;color:#1e40af;font-size:13px;padding:7px 11px;border-radius:8px;margin-top:7px;line-height:1.7}
 .msg{border-radius:10px;padding:13px 16px;font-size:15px;line-height:1.8;margin-top:14px;display:none}
 .msg.ok{background:#dcfce7;color:#166534;display:block}
 .msg.err{background:#fee2e2;color:#991b1b;display:block}
@@ -116,6 +118,7 @@ summary{cursor:pointer;font-size:15px;color:#2563eb;font-weight:bold;padding:6px
             <label class="f">班级 <span class="mini" onclick="toggleAll('cls',true)">全选</span><span class="mini" onclick="toggleAll('cls',false)">清空</span></label>
             <input class="search" id="clsSearch" placeholder="输入班级名快速找，如 会计" oninput="renderCls()">
             <div class="list" id="clsList"></div>
+            <div class="hint" id="clsHint" style="display:none"></div>
           </div>
         </div>
 
@@ -268,7 +271,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   var FOOTER = ['应收        份', '实收        份', '接收人：', '移交人：', '核查人：', '时间：'];
   var LEVEL_MAP = { '普通本科': '本科', '专升本': '专升本' };
   var LEVEL_ORDER = { '本科': 0, '专升本': 1 };
-  var GRADE_COLS = ['当前所在级', '年级', '入学年份', '所在级'];
+  // 「年级 / 级」取当前所在级为权威列；入学年份容易和「级」混淆，仅在该列缺失时兜底
+  var GRADE_PRIORITY = ['当前所在级', '年级', '所在级', '入学年份'];
   var INVALID_SHEET = /[\[\]:*?\/\\]/g;
 
   function s(v) { return v === null || v === undefined ? '' : String(v).trim(); }
@@ -293,11 +297,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       }
       return -1;
     }
+    var gradeCol = -1;
+    for (var gi = 0; gi < GRADE_PRIORITY.length; gi++) {
+      var gc = find([GRADE_PRIORITY[gi]]);
+      if (gc >= 0) { gradeCol = gc; break; }
+    }
     var idx = {
       id: find(['学号']), name: find(['姓名']), level: find(['培养层次']),
       college: find(['上课院系']), cls: find(['班级']), code: find(['班号']),
-      grades: cols.filter(function (c) { return GRADE_COLS.indexOf(c.name) >= 0; })
-                  .map(function (c) { return c.i; })
+      gradeCol: gradeCol
     };
     var need = [['学号', idx.id], ['姓名', idx.name], ['培养层次', idx.level],
                 ['上课院系', idx.college], ['班级', idx.cls]];
@@ -310,14 +318,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       var id = s(row[idx.id]);
       if (!id) continue;
       var lv0 = s(row[idx.level]);
-      var grades = idx.grades.map(function (j) { return year4(row[j]); })
-                             .filter(function (x) { return !!x; });
+      var g = idx.gradeCol >= 0 ? year4(row[idx.gradeCol]) : '';
       list.push({
         id: id, name: s(row[idx.name]), level0: lv0,
         level: LEVEL_MAP[lv0] || lv0 || '未分类',
         college: s(row[idx.college]), cls: s(row[idx.cls]),
         code: idx.code >= 0 ? s(row[idx.code]) : s(row[idx.cls]),
-        grades: grades
+        grades: g ? [g] : []
       });
     }
     if (!list.length) throw new Error('表头下面没有读到学生数据。');
@@ -329,13 +336,26 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     rows.forEach(function (r) {
       r.grades.forEach(function (g) { grades[g] = 1; });
       levels[r.level] = (levels[r.level] || 0) + 1;
-      colleges[r.college] = (colleges[r.college] || 0) + 1;
+      var ck = r.college;
+      if (!colleges[ck]) colleges[ck] = { name: ck, count: 0, byGL: {} };
+      colleges[ck].count++;
+      r.grades.forEach(function (g) {
+        var key = g + '||' + r.level;
+        colleges[ck].byGL[key] = (colleges[ck].byGL[key] || 0) + 1;
+      });
       var k = r.cls + '||' + r.college + '||' + r.level;
-      classes[k] = (classes[k] || 0) + 1;
+      if (!classes[k]) classes[k] = { name: r.cls, college: r.college, level: r.level, count: 0, grades: {}, byGL: {} };
+      classes[k].count++;
+      r.grades.forEach(function (g) {
+        classes[k].grades[g] = 1;
+        var key = g + '||' + r.level;
+        classes[k].byGL[key] = (classes[k].byGL[key] || 0) + 1;
+      });
     });
     var clsList = Object.keys(classes).map(function (k) {
-      var p = k.split('||');
-      return { name: p[0], college: p[1], level: p[2], count: classes[k] };
+      var c = classes[k];
+      return { name: c.name, college: c.college, level: c.level, count: c.count,
+               grades: Object.keys(c.grades), byGL: c.byGL };
     });
     return {
       grades: Object.keys(grades).sort(),
@@ -485,6 +505,21 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return m;
   }
 
+  // 按「年级 + 层次」联动计数：obj.byGL 是 { "2025||本科": 人数 } 这样的分布
+  function glCount(obj, grade, level) {
+    var sum = 0;
+    var byGL = obj && obj.byGL;
+    if (!byGL) return obj && obj.count ? obj.count : 0;
+    Object.keys(byGL).forEach(function (k) {
+      var p = k.split('||');
+      var g = p[0], l = p[1];
+      if (grade && g !== grade) return;
+      if (level && level !== 'all' && l !== level) return;
+      sum += (byGL[k] || 0);
+    });
+    return sum;
+  }
+
   async function build(rows, sel, mode, prefix, onProgress) {
     var picked = filterRows(rows, sel);
     if (!picked.length) throw new Error('筛选后没有学生，请把条件放宽一点。');
@@ -517,6 +552,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     HEADER: HEADER, FOOTER: FOOTER,
     parseRoster: parseRoster, options: options, filterRows: filterRows,
     groupRows: groupRows, build: build, buildZip: buildZip,
+    glCount: glCount,
     s: s, year4: year4
   };
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -540,17 +576,48 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   function optHtml(v, label){ return '<option value="'+v+'">'+label+'</option>'; }
 
+  function classMatch(c){
+    var grade=$('grade').value, level=$('level').value;
+    if(grade && c.grades.indexOf(grade)<0) return false;
+    if(level && level!=='all' && c.level!==level) return false;
+    return true;
+  }
+
+  // 学院人数随「年级 / 本科专升本」联动刷新
+  function refreshCollegeCounts(){
+    var grade=$('grade').value, level=$('level').value;
+    document.querySelectorAll('#colList span.colCnt').forEach(function(sp){
+      var k=sp.getAttribute('data-col');
+      var c=OPTS.colleges[k];
+      sp.textContent=k+'（'+C.glCount(c,grade,level)+'人）';
+    });
+  }
+
   function renderCls(){
     var q = ($('clsSearch').value||'').trim();
+    var grade=$('grade').value, level=$('level').value;
     var box = $('clsList'); box.innerHTML='';
+    var shown=0, matched=0;
     (OPTS.classes||[]).forEach(function(c){
       if(q && c.name.indexOf(q)<0 && c.college.indexOf(q)<0) return;
+      var ok=classMatch(c);
       var l=document.createElement('label');
-      var cb=document.createElement('input'); cb.type='checkbox'; cb.className='cls'; cb.value=c.name; cb.checked=true;
-      var sp=document.createElement('span'); sp.textContent=c.name+'（'+c.count+'人）';
+      if(!ok) l.className='dim';
+      var cb=document.createElement('input'); cb.type='checkbox'; cb.className='cls'; cb.value=c.name; cb.checked=ok;
+      var sp=document.createElement('span'); sp.textContent=c.name+'（'+C.glCount(c,grade,level)+'人）';
       l.appendChild(cb); l.appendChild(sp); box.appendChild(l);
+      shown++; if(ok) matched++;
     });
     box.querySelectorAll('input.cls').forEach(function(cb){cb.onchange=updateCount;});
+    var hint=$('clsHint');
+    if(hint){
+      if(grade || (level && level!=='all')){
+        hint.style.display='block';
+        hint.textContent='已按当前年级 / 层次自动勾选符合条件的班级（'+matched+' 个），其余已取消勾选并置灰。想手动加回，直接勾上即可。';
+      } else {
+        hint.style.display='none';
+      }
+    }
   }
 
   window.toggleAll = function(which, on){
@@ -598,14 +665,17 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
         var cb=$('colList'); cb.innerHTML='';
         Object.keys(OPTS.colleges).sort().forEach(function(k){
+          var c=OPTS.colleges[k];
           var l=document.createElement('label');
           var i=document.createElement('input'); i.type='checkbox'; i.value=k; i.checked=true;
-          var sp=document.createElement('span'); sp.textContent=k+'（'+OPTS.colleges[k]+'人）';
+          var sp=document.createElement('span'); sp.className='colCnt'; sp.setAttribute('data-col',k); sp.textContent=k+'（'+c.count+'人）';
           l.appendChild(i); l.appendChild(sp); cb.appendChild(l);
         });
         cb.querySelectorAll('input').forEach(function(i){i.onchange=updateCount;});
+        refreshCollegeCounts();
         renderCls();
-        $('grade').onchange=updateCount; $('level').onchange=updateCount;
+        $('grade').onchange=function(){ refreshCollegeCounts(); renderCls(); updateCount(); };
+        $('level').onchange=function(){ refreshCollegeCounts(); renderCls(); updateCount(); };
         $('filterCard').style.display='block'; $('goCard').style.display='block';
         updateCount();
       }catch(err){
