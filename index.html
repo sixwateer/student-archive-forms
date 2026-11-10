@@ -502,6 +502,16 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return { top: b, left: b, bottom: b, right: b };
   }
 
+  // 整表实线：全部细黑线（外框与内线一致，打印清晰且不显粗）
+  function applySolidBorders(ws, ncol, lastRow) {
+    var thin = { style: 'thin', color: { argb: 'FF000000' } };
+    for (var r = 1; r <= lastRow; r++) {
+      for (var c = 1; c <= ncol; c++) {
+        ws.getCell(r, c).border = { top: thin, bottom: thin, left: thin, right: thin };
+      }
+    }
+  }
+
   function font(bold) { return { name: '宋体', size: 11, bold: !!bold }; }
   function center() { return { horizontal: 'center', vertical: 'center', wrapText: false }; }
 
@@ -540,6 +550,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       var c = ws.getCell(start + i, 4);
       c.value = t; c.font = font(false);
     });
+
+    // 只为表头 + 学生行画实线框（外框加粗）；页脚签名区留白无线
+    var lastRow = start + Math.max(0, FOOTER.length - 1);
+    applySolidBorders(ws, HEADER.length, start - 1);
+    for (var fr = start; fr <= lastRow; fr++) {
+      for (var fc = 1; fc <= HEADER.length; fc++) {
+        ws.getCell(fr, fc).border = { top: {}, left: {}, bottom: {}, right: {} };
+      }
+    }
     return ws;
   }
 
