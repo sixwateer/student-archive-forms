@@ -52,6 +52,30 @@ summary{cursor:pointer;font-size:15px;color:#2563eb;font-weight:bold;padding:6px
 .foot{margin-top:22px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;color:#94a3b8;line-height:1.9}
 #old{display:none;background:#fee2e2;color:#991b1b;padding:16px;border-radius:10px;font-size:16px;margin-bottom:18px}
 @media print{.page{box-shadow:none}.card,.drop,button{break-inside:avoid}}
+.search-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.search-row input{margin:0}
+.search-info{font-size:12.5px;color:#475569;margin-top:6px;min-height:18px;line-height:1.6}
+.search-info b{color:#1d4ed8}
+.search-info .hl{background:#fde68a;border-radius:3px;padding:0 1px}
+.miniBtn{font-size:12px;color:#2563eb;cursor:pointer;border:1px solid #c7d2fe;background:#eff6ff;border-radius:6px;padding:3px 9px;margin-left:6px;white-space:nowrap}
+.miniBtn:hover{background:#dbeafe}
+.miniBtn.off{color:#94a3b8;border-color:#e2e8f0;background:#f8fafc}
+.selHi{background:#fff7cc!important;outline:2px solid #f59e0b;outline-offset:-2px}
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.preset{border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:8px 12px;font-size:13.5px;cursor:pointer;color:#334155}
+.preset:hover{border-color:#2563eb;background:#eff6ff;color:#1d4ed8}
+.preset.on{border-color:#2563eb;background:#2563eb;color:#fff;font-weight:bold}
+.check{margin-top:12px;border-radius:10px;padding:13px 15px;font-size:13.5px;line-height:1.75}
+.check.ok{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46}
+.check.err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+.check.warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+.check.info{background:#f1f5f9;border:1px solid #e2e8f0;color:#475569}
+.check .row{display:flex;gap:8px;padding:2px 0}
+.check .tag{flex:0 0 auto;font-weight:bold}
+.guide{font-size:13.5px;line-height:1.9;color:#374151}
+.guide ol{margin:6px 0 6px 2px;padding-left:20px}
+.guide li{margin:3px 0}
+.guide b{color:#1d4ed8}
 </style>
 </head>
 <body>
@@ -96,6 +120,7 @@ summary{cursor:pointer;font-size:15px;color:#2563eb;font-weight:bold;padding:6px
       <div style="flex:1">
         <div class="t">挑要整理的人（默认全部）</div>
         <div class="d">不用改就是全校都出。只想整理某一届、只要本科、或只挑几个学院班级，就在下面勾一勾。</div>
+        <div id="selfCheck" class="check info" style="margin-top:12px;display:none"></div>
 
         <div class="grid">
           <div>
@@ -112,18 +137,33 @@ summary{cursor:pointer;font-size:15px;color:#2563eb;font-weight:bold;padding:6px
           </div>
           <div>
             <label class="f">学院 <span class="mini" onclick="toggleAll('col',true)">全选</span><span class="mini" onclick="toggleAll('col',false)">清空</span></label>
+            <div class="search-row"><input class="search" id="colSearch" placeholder="输入学院名快速找，如 计算机" oninput="renderCol()"></div>
+            <div class="search-info" id="colInfo"></div>
             <div class="list" id="colList"></div>
           </div>
           <div>
             <label class="f">班级 <span class="mini" onclick="toggleAll('cls',true)">全选</span><span class="mini" onclick="toggleAll('cls',false)">清空</span></label>
-            <input class="search" id="clsSearch" placeholder="输入班级名快速找，如 会计" oninput="renderCls()">
+            <input class="search" id="clsSearch" placeholder="输入班级名快速找，如 会计、机器人" oninput="renderCls()">
+            <div class="search-info" id="clsInfo"></div>
             <div class="list" id="clsList"></div>
+            <div style="margin-top:7px">
+              <span class="miniBtn" id="clsSelMatch" onclick="selectMatched('cls',true)">全选匹配项</span>
+              <span class="miniBtn off" id="clsClrMatch" onclick="selectMatched('cls',false)">清空匹配项</span>
+            </div>
             <div class="hint" id="clsHint" style="display:none"></div>
           </div>
         </div>
 
         <details>
           <summary>输出方式（一般不用改）</summary>
+          <label class="f">预设模板（点一下套用，最常用场景）</label>
+          <div class="presets">
+            <span class="preset" data-mode="college-level" data-lv="本科" onclick="applyPreset(this)">本科 · 按学院分</span>
+            <span class="preset" data-mode="college-level" data-lv="专升本" onclick="applyPreset(this)">专升本 · 按学院分</span>
+            <span class="preset" data-mode="level" data-lv="all" onclick="applyPreset(this)">全部 · 按层次分</span>
+            <span class="preset" data-mode="college" data-lv="all" onclick="applyPreset(this)">全部 · 只按学院分</span>
+            <span class="preset" data-mode="class" data-lv="all" onclick="applyPreset(this)">全部班级 · 一个文件</span>
+          </div>
           <div class="grid" style="margin-top:12px">
             <div>
               <label class="f">文件怎么分</label>
@@ -185,6 +225,30 @@ summary{cursor:pointer;font-size:15px;color:#2563eb;font-weight:bold;padding:6px
   <div class="q"><b>Q：点了没反应 / 没下载？</b><br>① 看浏览器右上角有没有提示「已阻止下载」，点「保留」；② 换 Edge 或 Chrome 打开这个文件；③ 关掉浏览器的「下载前询问保存位置」后重试。文件默认在「下载」文件夹里。</div>
   <div class="q"><b>Q：表格里「是否存档」「备注」为什么是空的？</b><br>这两列是留给现场手写打勾的，故意留空。底部「应收 / 实收 / 接收人…」也保持模板原文。</div>
   <div class="q"><b>Q：会不会把学生信息传到网上？</b><br>不会。这个网页没有联网功能，所有计算都在你自己的浏览器里完成；关掉页面就没了。</div>
+
+  <div class="card">
+    <details>
+      <summary>📘 操作指引（第一次用看这里）</summary>
+      <div class="guide">
+        <ol>
+          <li><b>选名册</b>：点「选择学生名册」或把 Excel 拖进框里。读完后会出现「名册自检」。</li>
+          <li><b>看自检</b>：红字＝必须先修名册（如重复学号）；黄字＝提醒；绿字＝可放心生成。</li>
+          <li><b>挑数据</b>：默认全选。<br>
+            · <b>年级</b>：选具体「X级」按入学年份/届别筛；选「全部年级」只按下面条件筛。<br>
+            · <b>层次</b>：本科 / 专升本（专科）/ 一起出。<br>
+            · <b>学院 / 班级</b>：在框里输入关键字（如「机器人」「计算机」）秒搜；搜到后点「全选匹配项」一键勾上。</li>
+          <li><b>看实时统计</b>：下方显示「本次会生成 X 人 / Y 个班级的表」，选错马上能看出。</li>
+          <li><b>生成</b>：点绿色大按钮，等几秒自动下载（ZIP 或 Excel）。若浏览器提示「已阻止下载」，点「保留」。</li>
+          <li><b>合并发给别人</b>：拉到最下面「合并已有成果」，选入多个学院 zip/xlsx，一键合成一个大 ZIP。</li>
+        </ol>
+        <b>常见问题</b><br>
+        · <b>双击没反应 / 记事本打开了</b>：右键文件 →「打开方式」→ 选 Edge / Chrome。<br>
+        · <b>搜索找不到</b>：关键字是班级/学院名里的字（不是学号）；搜到后点「全选匹配项」即可勾上。<br>
+        · <b>选了年级却没勾班级</b>：说明该年级下没有班级（或名册年级列是空的），看「名册自检」提示。<br>
+        · <b>打印</b>：打开 Excel → Ctrl+P → 打印范围选「整个工作簿」一次打完。
+      </div>
+    </details>
+  </div>
 
   <div class="foot">
     学生档案表生成器 · 网页版　｜　单文件离线运行，无需安装、无需服务器、无需账号。<br>
@@ -290,8 +354,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   var FOOTER = ['应收        份', '实收        份', '接收人：', '移交人：', '核查人：', '时间：'];
   var LEVEL_MAP = { '普通本科': '本科', '专升本': '专升本' };
   var LEVEL_ORDER = { '本科': 0, '专升本': 1 };
-  // 「年级 / 级」取当前所在级为权威列；入学年份容易和「级」混淆，仅在该列缺失时兜底
-  var GRADE_PRIORITY = ['当前所在级', '年级', '所在级', '入学年份'];
+  // 「X 级」= 入学年份（入学届别）。名册里「当前所在级」往往同一年级、无法区分届别，
+  // 故优先用「入学年份」作为筛选年级，缺失时再退回「当前所在级 / 年级」
+  var GRADE_PRIORITY = ['入学年份', '当前所在级', '年级', '所在级'];
   var INVALID_SHEET = /[\[\]:*?\/\\]/g;
 
   function s(v) { return v === null || v === undefined ? '' : String(v).trim(); }
@@ -651,7 +716,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 (function(){
   'use strict';
   var C = window.ArchiveCore, $ = function(id){return document.getElementById(id);};
-  var ROWS = null, OPTS = null;
+  var ROWS = null, OPTS = null, colSel = new Set(), clsSel = new Set();
 
   function msg(id, cls, text){ var e=$(id); e.className='msg '+(cls||''); e.textContent=text; }
 
@@ -678,6 +743,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   function optHtml(v, label){ return '<option value="'+v+'">'+label+'</option>'; }
 
+  function hl(text,q){
+    if(!q) return C.s(text);
+    var q2=String(q), t=String(text);
+    var i=t.toLowerCase().indexOf(q2.toLowerCase());
+    if(i<0) return C.s(t);
+    return C.s(t.slice(0,i))+'<span class="hl">'+C.s(t.slice(i,i+q2.length))+'</span>'+C.s(t.slice(i+q2.length));
+  }
+
   function classMatch(c){
     var grade=$('grade').value, level=$('level').value;
     if(grade && c.grades.indexOf(grade)<0) return false;
@@ -695,22 +768,71 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     });
   }
 
-  function renderCls(){
-    var q = ($('clsSearch').value||'').trim();
-    var grade=$('grade').value, level=$('level').value;
-    var box = $('clsList'); box.innerHTML='';
-    var shown=0, matched=0;
-    (OPTS.classes||[]).forEach(function(c){
-      if(q && c.name.indexOf(q)<0 && c.college.indexOf(q)<0) return;
-      var ok=classMatch(c);
+  // 年级/层次变化时：班级自动勾选符合的，其余取消
+  function syncSelections(){
+    clsSel=new Set();
+    (OPTS.classes||[]).forEach(function(c){ if(classMatch(c)) clsSel.add(c.name); });
+  }
+
+  function renderCol(){
+    if(!OPTS) return;
+    var q=($('colSearch').value||'').trim();
+    var box=$('colList'); box.innerHTML='';
+    var shown=0, sel=0, first=true;
+    Object.keys(OPTS.colleges).sort().forEach(function(k){
+      if(q && k.indexOf(q)<0) return;
+      var c=OPTS.colleges[k];
+      shown++;
+      var checked=colSel.has(k); if(checked) sel++;
       var l=document.createElement('label');
-      if(!ok) l.className='dim';
-      var cb=document.createElement('input'); cb.type='checkbox'; cb.className='cls'; cb.value=c.name; cb.checked=ok;
+      if(q&&first) l.className='selHi'; if(q) first=false;
+      var cb=document.createElement('input'); cb.type='checkbox'; cb.value=k; cb.checked=checked;
+      var sp=document.createElement('span'); sp.className='colCnt'; sp.setAttribute('data-col',k);
+      sp.textContent=k+'（'+c.count+'人）';
+      l.appendChild(cb); l.appendChild(sp); box.appendChild(l);
+    });
+    if(!shown){ var d=document.createElement('div'); d.style.cssText='padding:10px;color:#94a3b8;font-size:13px'; d.textContent='没有匹配的学院'; box.appendChild(d); }
+    box.querySelectorAll('input').forEach(function(cb){
+      cb.onchange=function(){ if(cb.checked)colSel.add(cb.value); else colSel.delete(cb.value); renderCls(); updateCount(); };
+    });
+    var info=$('colInfo');
+    info.innerHTML = q
+      ? (shown
+          ? ('找到 <b>'+shown+'</b> 个学院（其中已选 '+sel+'） <span class="miniBtn" onclick="selectMatched(\'col\',true)">全选匹配</span><span class="miniBtn off" onclick="selectMatched(\'col\',false)">清空匹配</span>')
+          : ('没有匹配的学院（共 '+Object.keys(OPTS.colleges).length+' 个，已选 '+colSel.size+'）'))
+      : ('共 '+Object.keys(OPTS.colleges).length+' 个学院，已选 '+colSel.size);
+    if(q && shown){ var f=box.querySelector('.selHi'); if(f) f.scrollIntoView({block:'nearest'}); }
+    refreshCollegeCounts();
+  }
+
+  function renderCls(){
+    if(!OPTS) return;
+    var q=($('clsSearch').value||'').trim();
+    var grade=$('grade').value, level=$('level').value;
+    var box=$('clsList'); box.innerHTML='';
+    var shown=0, matched=0, sel=0, first=true;
+    (OPTS.classes||[]).forEach(function(c){
+      if(q && c.name.indexOf(q)<0) return;
+      shown++;
+      var ok=classMatch(c);
+      if(ok) matched++;
+      var checked=clsSel.has(c.name); if(checked) sel++;
+      var l=document.createElement('label');
+      if(!ok) l.className='dim'; if(q&&first){ l.className+=' selHi'; } if(q) first=false;
+      var cb=document.createElement('input'); cb.type='checkbox'; cb.className='cls'; cb.value=c.name; cb.checked=checked;
       var sp=document.createElement('span'); sp.textContent=c.name+'（'+C.glCount(c,grade,level)+'人）';
       l.appendChild(cb); l.appendChild(sp); box.appendChild(l);
-      shown++; if(ok) matched++;
     });
-    box.querySelectorAll('input.cls').forEach(function(cb){cb.onchange=updateCount;});
+    if(!shown){ var d=document.createElement('div'); d.style.cssText='padding:10px;color:#94a3b8;font-size:13px'; d.textContent='没有匹配的班级'; box.appendChild(d); }
+    box.querySelectorAll('input.cls').forEach(function(cb){cb.onchange=function(){ if(cb.checked)clsSel.add(cb.value); else clsSel.delete(cb.value); updateCount(); };});
+    var info=$('clsInfo');
+    if(q){
+      info.innerHTML='找到 <b>'+shown+'</b> 个班级（'+matched+' 个符合当前年级/层次将生成，已选 '+sel+'）'
+        +(shown?' <span class="miniBtn" onclick="selectMatched(\'cls\',true)">全选匹配项</span><span class="miniBtn off" onclick="selectMatched(\'cls\',false)">清空匹配项</span>':'');
+      if(shown){ var f=box.querySelector('.selHi'); if(f) f.scrollIntoView({block:'nearest'}); }
+    } else {
+      info.innerHTML='共 '+OPTS.classes.length+' 个班级，已选 '+clsSel.size;
+    }
     var hint=$('clsHint');
     if(hint){
       if(grade || (level && level!=='all')){
@@ -722,18 +844,39 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
   }
 
-  window.toggleAll = function(which, on){
-    var sel = which==='col' ? '#colList input' : '#clsList input';
-    document.querySelectorAll(sel).forEach(function(cb){cb.checked=on;});
+  // 内联 oninput="renderCls()" 需要全局可见（IIFE 内部函数默认不可见）
+  window.renderCol=renderCol;
+  window.renderCls=renderCls;
+
+  window.selectMatched=function(kind,on){
+    if(!OPTS) return;
+    var q = kind==='col' ? ($('colSearch').value||'').trim() : ($('clsSearch').value||'').trim();
+    var list = kind==='col' ? Object.keys(OPTS.colleges) : (OPTS.classes||[]).map(function(c){return c.name;});
+    list.forEach(function(name){
+      if(q && name.indexOf(q)<0) return;
+      if(on) (kind==='col'?colSel:clsSel).add(name); else (kind==='col'?colSel:clsSel).delete(name);
+    });
+    renderCol(); renderCls(); updateCount();
+  };
+
+  window.toggleAll=function(which,on){
+    var list = which==='col' ? Object.keys(OPTS.colleges) : (OPTS.classes||[]).map(function(c){return c.name;});
+    list.forEach(function(name){ if(on)(which==='col'?colSel:clsSel).add(name); else (which==='col'?colSel:clsSel).delete(name); });
+    renderCol(); renderCls(); updateCount();
+  };
+
+  window.applyPreset=function(el){
+    var mode=el.getAttribute('data-mode'), lv=el.getAttribute('data-lv');
+    $('mode').value=mode;
+    Array.prototype.forEach.call(document.querySelectorAll('#level option'),function(o){o.selected=(o.value===lv);});
+    if(OPTS){ colSel=new Set(Object.keys(OPTS.colleges)); syncSelections(); renderCol(); renderCls(); }
+    Array.prototype.forEach.call(document.querySelectorAll('.preset'),function(p){p.classList.remove('on');});
+    el.classList.add('on');
     updateCount();
   };
 
   function selected(){
-    var grade=$('grade').value, level=$('level').value;
-    var colleges=[], classes=[];
-    document.querySelectorAll('#colList input:checked').forEach(function(cb){colleges.push(cb.value);});
-    document.querySelectorAll('#clsList input:checked').forEach(function(cb){classes.push(cb.value);});
-    return {grade:grade, level:level, colleges:colleges, classes:classes};
+    return {grade:$('grade').value, level:$('level').value, colleges:[...colSel], classes:[...clsSel]};
   }
 
   function updateCount(){
@@ -746,6 +889,45 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       ? '本次会生成 <b>'+picked.length+'</b> 人 / <b>'+nClass+'</b> 个班级的表。'
       : '<span style="color:#b91c1c">当前条件一个学生都没选中，请点「全选」或放宽条件。</span>';
     $('go').disabled = picked.length===0;
+  }
+
+  // 名册自检（纯前端）：返回 [{lvl, text}]
+  function computeSelfCheck(rows, opts){
+    var out=[];
+    if(!rows || !rows.length){ return [{lvl:'error', text:'名册里没有读到任何学生数据。'}]; }
+    var total=rows.length;
+    // 重复学号
+    var seen={}, dup=0;
+    rows.forEach(function(r){ var id=C.s(r.id); if(seen[id]) dup++; else seen[id]=1; });
+    if(dup){ out.push({lvl:'error', text:'发现 '+dup+' 个重复学号！重复学号会导致人数偏多、同一人出多张表，请先在教务处核实去重。'}); }
+    // 空值
+    ['id','name','college','cls','level'].forEach(function(key){
+      var label={id:'学号',name:'姓名',college:'学院',cls:'班级',level:'培养层次'}[key];
+      var empty=rows.filter(function(r){return !C.s(r[key]);}).length;
+      if(empty){ out.push({lvl:'warn', text:'有 '+empty+' 行「'+label+'」为空，这些学生统计人数但归属可能缺失，请核对名册。'}); }
+    });
+    // 年级
+    var hasGrade = opts.grades && opts.grades.length;
+    if(!hasGrade){ out.push({lvl:'info', text:'名册里没有可用的年级列，年级下拉只有「全部年级」；如需按届别筛，请在名册加「入学年份」列。'}); }
+    else { out.push({lvl:'info', text:'年级按「入学年份 / 当前所在级」识别，可选：'+opts.grades.join('、')+'。'}); }
+    var ncol=Object.keys(opts.colleges).length, ncls=opts.classes.length;
+    out.push({lvl:'info', text:'共 '+total+' 人，分布在 '+ncol+' 个学院 / '+ncls+' 个班级。'});
+    if(!out.some(function(w){return w.lvl==='error';})) out.push({lvl:'ok', text:'✅ 名册自检通过，可以直接生成。'});
+    var rnk=function(w){return {error:0,warn:1,ok:2,info:3}[w.lvl]||1;};
+    return out.sort(function(a,b){return rnk(a)-rnk(b);});
+  }
+
+  function renderSelfCheck(warnings){
+    var box=$('selfCheck');
+    if(!warnings || !warnings.length){ box.className='check info'; box.style.display='block'; box.textContent='无需检查。'; return; }
+    var h='';
+    warnings.forEach(function(w){
+      var tag=w.lvl==='error'?'⛔ 错误':w.lvl==='warn'?'⚠ 提醒':w.lvl==='ok'?'✅ 通过':'ℹ 信息';
+      h+='<div class="row"><span class="tag">'+tag+'</span><span>'+C.s(w.text)+'</span></div>';
+    });
+    box.innerHTML=h;
+    box.className='check '+(warnings.some(function(w){return w.lvl==='error';})?'err':(warnings.some(function(w){return w.lvl==='warn';})?'warn':'ok'));
+    box.style.display='block';
   }
 
   function loadFile(f){
@@ -765,19 +947,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         lv.innerHTML=optHtml('all','一起出（全部）');
         Object.keys(OPTS.levels).forEach(function(k){lv.innerHTML+=optHtml(k,'只要'+k);});
 
-        var cb=$('colList'); cb.innerHTML='';
-        Object.keys(OPTS.colleges).sort().forEach(function(k){
-          var c=OPTS.colleges[k];
-          var l=document.createElement('label');
-          var i=document.createElement('input'); i.type='checkbox'; i.value=k; i.checked=true;
-          var sp=document.createElement('span'); sp.className='colCnt'; sp.setAttribute('data-col',k); sp.textContent=k+'（'+c.count+'人）';
-          l.appendChild(i); l.appendChild(sp); cb.appendChild(l);
-        });
-        cb.querySelectorAll('input').forEach(function(i){i.onchange=updateCount;});
-        refreshCollegeCounts();
+        colSel=new Set(Object.keys(OPTS.colleges));
+        renderCol();
+        syncSelections();
         renderCls();
-        $('grade').onchange=function(){ refreshCollegeCounts(); renderCls(); updateCount(); };
-        $('level').onchange=function(){ refreshCollegeCounts(); renderCls(); updateCount(); };
+        $('grade').onchange=function(){ refreshCollegeCounts(); syncSelections(); renderCls(); updateCount(); };
+        $('level').onchange=function(){ refreshCollegeCounts(); syncSelections(); renderCls(); updateCount(); };
+        renderSelfCheck(computeSelfCheck(ROWS, OPTS));
+        $('selfCheck').style.display='block';
         $('filterCard').style.display='block'; $('goCard').style.display='block';
         updateCount();
       }catch(err){
