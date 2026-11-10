@@ -7,6 +7,7 @@
 - 每个 sheet 都设好 **A4 纵向、四周 2cm、缩放至一页宽、水平居中、每页重复表头**
 - 自动按宋体字宽反推列宽，长班名（如 `会计(产业学院)2026-1`）不会被截断
 - **先筛选再生成**：按年级、本科/专升本/一起、学院、班级任意组合挑人，不再一股脑全出
+- **成果可一键合并**：散落的十几个学院表、或「本科(9学院).zip + 专升本(8学院).zip」，一条命令合成一个总 ZIP（附合并清单 + 完整性校验），方便整体转发
 - 自带校验脚本：人数、学号集合、班级数、表头页脚、打印参数逐项核对；筛选时自动按同一批学生核对
 
 既是一套独立命令行工具，也是一个 [Agent Skills](https://agentskills.io) 格式的 skill（`SKILL.md`）。
@@ -92,7 +93,7 @@ python scripts/generate.py --config 我的配置.json --exclude-ids @不打印�
 
 | 参数 | 作用 |
 |---|---|
-| `--grade 2025` / `2025级` | 按年级筛（自动识别「当前所在级 / 年级 / 入学年份」），并自动把 `2025级` 写进文件名 |
+| `--grade 2025` / `2025级` | 按年级筛（**入学年份优先**，缺失时用「当前所在级 / 年级」兜底），并自动把 `2025级` 写进文件名 |
 | `--level 本科` / `专升本` / `本科,专升本` | 只要某个层次；留空 = 两个层次一起出 |
 | `--college 商学院,法学院` | 只要这些学院 |
 | `--class 会计本2026-1` | 只要这些班级；也支持 JSON 数组 `["…","…"]` |
@@ -117,6 +118,27 @@ python scripts/generate.py --config 我的配置.json --exclude-ids @不打印�
 
 加 `--stats` 输出学院 × 层次人数占比；加 `--zip-by-level` 直接产出两个压缩包；加 `--exclude 专升本` 只出本科。
 
+## 合并分发（合成一个总 ZIP）
+
+按学院分层次生成后，成果通常是十几个 `.xlsx`，或两个 zip（本科 9 个学院、专升本 8 个学院）。整体发给别人前先合成一个：
+
+```bash
+# 直接合并整个输出目录
+python scripts/combine.py --in ./output --out 档案表成果-合并全部.zip
+
+# 或者喂已有的 zip / 单个 xlsx（可多次 --in，混合都行）
+python scripts/combine.py \
+  --in "本科(9个学院).zip" --in "专升本(8个学院).zip" \
+  --out 档案表成果-合并全部.zip
+```
+
+- 输入可以是 **文件夹 / `.zip` / `.xlsx` / `.txt` 任意混合**；zip 里的表格会被展平收进总包，不会嵌套一层 zip
+- **同名自动去重**：不同来源的同名学生表会加「来源__」前缀，不会互相覆盖
+- 自动写 `_合并清单.txt`（记录每个文件来自哪里、共多少表格），并做 `testzip` 完整性校验
+- `--include-history` 一并收进历史批次；`--no-reports` 不收 `_生成报告.txt` 这类报告
+
+参数全见 `python scripts/combine.py --help`。
+
 ## 作为 Agent Skill 使用
 
 把整个目录放到 skills 目录即可，例如 WorkBuddy 的 `~/.workbuddy/skills/student-archive-forms/`。
@@ -126,13 +148,15 @@ python scripts/generate.py --config 我的配置.json --exclude-ids @不打印�
 ## 目录结构
 
 ```
-SKILL.md                       skill 入口（触发条件 + 工作流）
+SKILL.md                       skill 入口（触发条件 + 工作流 + 年级口径 + 交互约定）
 scripts/generate.py            主生成器（全部参数见 --help）
 scripts/verify.py              输出校验器
+scripts/combine.py             把散落成果合并成一个总 ZIP
 scripts/config.example.json    可直接试跑的示例配置
 references/parameters.md       参数详解、模板结构要求、A4 列宽算法
 references/environment.md      环境与编码注意事项
 examples/make_demo.py          生成虚构演示数据（不入库）
+操作指引.md                    面向非技术用户的一页纸操作指引
 ```
 
 ## 打印
