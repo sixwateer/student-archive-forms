@@ -13,10 +13,10 @@
 
 ## 依赖
 
-Python 3.9+，依赖见仓库根目录 `requirements.txt`：
+Python 3.9+。直接安装三个依赖（仓库根目录另附 `requirements.txt`）：
 
 ```bash
-python -m pip install -r requirements.txt
+python -m pip install "pandas>=1.5" "openpyxl>=3.1" "xlrd>=2.0"
 ```
 
 | 包 | 用途 |
