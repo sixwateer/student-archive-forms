@@ -222,7 +222,7 @@ summary{cursor:pointer;font-size:15px;color:#2563eb;font-weight:bold;padding:6px
   </div>
 
   <div class="q"><b>Q：下载后怎么打印？</b><br>打开下载到的 Excel → 按 <b>Ctrl + P</b> → 打印范围选「<b>整个工作簿</b>」，一次打完里面所有班级。选「活动工作表」只打当前班级。</div>
-  <div class="q"><b>Q：点了没反应 / 没下载？</b><br>① 看浏览器右上角有没有提示「已阻止下载」，点「保留」；② 换 Edge 或 Chrome 打开这个文件；③ 关掉浏览器的「下载前询问保存位置」后重试。文件默认在「下载」文件夹里。</div>
+  <div class="q"><b>Q：点了没反应 / 没下载？</b><br>① 看页面下方有没有出现蓝色「保存文件」按钮，点它手动保存；② 看浏览器右上角有没有「已阻止下载」，点「保留」；③ <b>QQ 浏览器 / 微信里打开</b>：点右上角「···」→「用浏览器打开」（系统浏览器），再生成一次最稳；④ 关掉「下载前询问保存位置」后重试。文件默认在「下载」文件夹里。</div>
   <div class="q"><b>Q：表格里「是否存档」「备注」为什么是空的？</b><br>这两列是留给现场手写打勾的，故意留空。底部「应收 / 实收 / 接收人…」也保持模板原文。</div>
   <div class="q"><b>Q：会不会把学生信息传到网上？</b><br>不会。这个网页没有联网功能，所有计算都在你自己的浏览器里完成；关掉页面就没了。</div>
 
@@ -740,25 +740,113 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   function msg(id, cls, text){ var e=$(id); e.className='msg '+(cls||''); e.textContent=text; }
 
+  // —— 下载：桌面自动下载；QQ / 微信 / 手机浏览器改用兼容模式 ——
+  var LAST_DL = null, OBJ_URLS = [];
+
+  function mimeOf(name){
+    var n=String(name).toLowerCase();
+    if(/\.zip$/.test(n)) return 'application/zip';
+    if(/\.xlsx$/.test(n)) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    if(/\.xls$/.test(n)) return 'application/vnd.ms-excel';
+    return 'application/octet-stream';
+  }
+  function fmtSize(n){ return n>=1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(n/1024))+' KB'; }
+  function weakBrowser(){
+    var ua=navigator.userAgent||'';
+    if(/MQQBrowser|QQBrowser|MicroMessenger|WeChat|TencentTraveler|QQ\//i.test(ua)) return true;
+    if(/Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(ua)) return true;
+    if(location.protocol==='content:') return true;
+    return false;
+  }
+  function toDataURL(blob){
+    return new Promise(function(res,rej){
+      var fr=new FileReader();
+      fr.onload=function(){ res(fr.result); };
+      fr.onerror=function(){ rej(new Error('读取文件失败')); };
+      fr.readAsDataURL(blob);
+    });
+  }
+  function assertBuffer(buf,name){
+    if(!buf || !buf.byteLength) throw new Error('生成的文件为空，请重新点一次生成。');
+    if(buf.byteLength>=2 && /\.zip$/i.test(name)){
+      var u=new Uint8Array(buf,0,2);
+      if(!(u[0]===0x50 && u[1]===0x4b)) throw new Error('生成的 ZIP 不完整，请重新点一次生成。');
+    }
+  }
+  function dlBox(mount){
+    var host=mount||document.body;
+    var old=host.querySelector('.dlFallback');
+    if(old) old.parentNode.removeChild(old);
+    var box=document.createElement('div');
+    box.className='dlFallback'; box.id='dlFallback';
+    box.style.cssText='margin-top:14px;padding:14px 16px;border:2px solid #2563eb;border-radius:11px;background:#eff6ff;font-size:14px;line-height:1.85';
+    host.appendChild(box);
+    return box;
+  }
+  function renderDlBox(box,d,primary,weak){
+    box.innerHTML='';
+    var head=document.createElement('div');
+    head.innerHTML='<b>✅ 文件已生成：'+C.s(d.name)+'</b>（'+fmtSize(d.blob.size)+'）';
+    box.appendChild(head);
+    var tip=document.createElement('div');
+    tip.style.cssText='margin-top:4px;color:'+(weak?'#b45309':'#475569');
+    tip.textContent = weak
+      ? '当前是 QQ / 微信 / 手机浏览器，自动下载容易被拦或存成 .bin，请手动点下面的按钮保存；若仍失败，点右上角「···」→ 用系统浏览器打开后再生成一次。保存后若文件名不对，请改成：'+d.name
+      : '文件一般在「下载」文件夹里。若浏览器提示「已阻止下载」，请点「保留」。';
+    box.appendChild(tip);
+    var a=document.createElement('a');
+    a.setAttribute('data-primary','1');
+    a.href=primary; a.download=d.name;
+    a.textContent=weak?'⬇ 点这里保存文件':'👉 如果没自动下载，点这里手动保存';
+    a.style.cssText='display:inline-block;margin:10px 8px 0 0;padding:10px 16px;border-radius:9px;background:#2563eb;color:#fff;font-weight:bold;text-decoration:none';
+    box.appendChild(a);
+    var altHref = primary.indexOf('data:')===0 ? d.url : d.dataUrl;
+    if(altHref && altHref!==primary){
+      var alt=document.createElement('a');
+      alt.href=altHref; alt.download=d.name;
+      alt.textContent=primary.indexOf('data:')===0?'备用：标准下载':'备用：兼容下载';
+      alt.style.cssText='color:#1d4ed8;font-weight:bold;margin-left:8px';
+      box.appendChild(alt);
+    }
+    var retry=document.createElement('button');
+    retry.setAttribute('data-retry','1');
+    retry.textContent='🔄 重新下载';
+    retry.style.cssText='margin:10px 0 0 10px;padding:7px 12px;border:1px solid #94a3b8;border-radius:8px;background:#fff;cursor:pointer;font-size:13px';
+    retry.onclick=function(){ download(d.name,d.buf,d.mount); };
+    box.appendChild(retry);
+  }
+  // 页面关闭时才回收 blob URL：QQ 浏览器的下载管理器是异步取数据的，
+  // 过早 revokeObjectURL 会导致 0% 失败 / 只存下 .bin
+  window.addEventListener('beforeunload',function(){
+    OBJ_URLS.forEach(function(u){ try{URL.revokeObjectURL(u);}catch(e){} });
+  });
+
   function download(name, buf, mount){
-    var blob = new Blob([buf], {type:'application/octet-stream'});
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href=url; a.download=name; a.style.display='none';
-    document.body.appendChild(a); a.click();
-    // 兜底：file:// 本地打开或浏览器拦截自动下载时，显示一个可手动点击的链接
-    try{
-      var fb=document.createElement('div');
-      fb.style.cssText='margin-top:12px;padding:11px 13px;border:1px dashed #2563eb;border-radius:9px;background:#eff6ff;font-size:14px;line-height:1.7';
-      var link=document.createElement('a');
-      link.href=url; link.download=name;
-      link.textContent='👉 如果没自动下载，点这里手动保存「'+name+'」';
-      link.style.cssText='color:#1d4ed8;font-weight:bold';
-      fb.appendChild(link);
-      (mount||document.body).appendChild(fb);
-      setTimeout(function(){ if(fb.parentNode)fb.parentNode.removeChild(fb); }, 120000);
-    }catch(e){}
-    setTimeout(function(){ URL.revokeObjectURL(url); if(a.parentNode)a.parentNode.removeChild(a); }, 60000);
+    assertBuffer(buf,name);
+    var mime=mimeOf(name);
+    var blob=new Blob([buf],{type:mime});
+    var weak=weakBrowser();
+    var url=URL.createObjectURL(blob); OBJ_URLS.push(url);
+    var d={name:name,buf:buf,blob:blob,mime:mime,url:url,mount:mount||document.body,weak:weak};
+    LAST_DL=d;
+    var box=dlBox(d.mount);
+    var render=function(primary){ renderDlBox(box,d,primary,weak); };
+
+    if(weak){
+      // 兼容模式：不自动触发隐藏链接（避免产生下载失败项和 UUID.bin）
+      if(blob.size<=2*1024*1024){
+        toDataURL(blob).then(function(du){ d.dataUrl=du; render(du); })
+                       .catch(function(){ render(url); });
+      } else { render(url); }
+    } else {
+      // 桌面浏览器：保持原来的自动下载
+      var a=document.createElement('a');
+      a.href=url; a.download=name; a.style.display='none';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ if(a.parentNode)a.parentNode.removeChild(a); },10000);
+      render(url);
+    }
+    return {weak:weak,size:blob.size};
   }
 
   function optHtml(v, label){ return '<option value="'+v+'">'+label+'</option>'; }
@@ -778,6 +866,35 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return true;
   }
 
+  // 当前班级作用域：只保留「已选学院」下的班级（可再按关键词缩小）
+  // 班级列表、自动勾选、全选/清空、全选匹配项全部以它为准，避免混入其他学院
+  function scopeClasses(q){
+    q = q || '';
+    var all = (OPTS && OPTS.classes) || [];
+    if(colSel.size === Object.keys(OPTS.colleges).length) {
+      return q ? all.filter(function(c){ return c.name.indexOf(q)>=0; }) : all;
+    }
+    return all.filter(function(c){
+      if(!colSel.has(c.college)) return false;
+      if(q && c.name.indexOf(q)<0) return false;
+      return true;
+    });
+  }
+
+  // 当前筛选条件的可读摘要：供说明文字使用，任意筛选变化都会重新生成
+  function filterSummary(){
+    var grade=$('grade').value, level=$('level').value;
+    var n=colSel.size, total=Object.keys(OPTS.colleges).length;
+    var college = n===0 ? '未选学院'
+      : n===total ? ('全部 '+total+' 个学院')
+      : n===1 ? [...colSel][0]
+      : ('已选 '+n+' 个学院');
+    var lv = (level && level!=='all') ? level : '全部层次';
+    var gr = grade ? (grade+'级') : '全部年级';
+    return {college:college, level:lv, grade:gr,
+            text:college+' · '+lv+' · '+gr};
+  }
+
   // 学院人数随「年级 / 本科专升本」联动刷新
   function refreshCollegeCounts(){
     var grade=$('grade').value, level=$('level').value;
@@ -788,10 +905,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     });
   }
 
-  // 年级/层次变化时：班级自动勾选符合的，其余取消
+  // 年级/层次/学院变化时：只自动勾选「当前已选学院」内符合条件的班级
   function syncSelections(){
     clsSel=new Set();
-    (OPTS.classes||[]).forEach(function(c){ if(classMatch(c)) clsSel.add(c.name); });
+    scopeClasses().forEach(function(c){ if(classMatch(c)) clsSel.add(c.name); });
   }
 
   function renderCol(){
@@ -813,7 +930,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     });
     if(!shown){ var d=document.createElement('div'); d.style.cssText='padding:10px;color:#94a3b8;font-size:13px'; d.textContent='没有匹配的学院'; box.appendChild(d); }
     box.querySelectorAll('input').forEach(function(cb){
-      cb.onchange=function(){ if(cb.checked)colSel.add(cb.value); else colSel.delete(cb.value); renderCls(); updateCount(); };
+      cb.onchange=function(){
+        if(cb.checked)colSel.add(cb.value); else colSel.delete(cb.value);
+        // 学院变了，班级勾选范围必须同步重算（不再残留其他学院的班级）
+        syncSelections(); renderCol(); renderCls(); updateCount();
+      };
     });
     var info=$('colInfo');
     info.innerHTML = q
@@ -830,37 +951,47 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var q=($('clsSearch').value||'').trim();
     var grade=$('grade').value, level=$('level').value;
     var box=$('clsList'); box.innerHTML='';
+    var list=scopeClasses(q);
     var shown=0, matched=0, sel=0, first=true;
-    (OPTS.classes||[]).forEach(function(c){
-      if(q && c.name.indexOf(q)<0) return;
+    list.forEach(function(c){
       shown++;
       var ok=classMatch(c);
       if(ok) matched++;
       var checked=clsSel.has(c.name); if(checked) sel++;
       var l=document.createElement('label');
-      if(!ok) l.className='dim'; if(q&&first){ l.className+=' selHi'; } if(q) first=false;
+      l.setAttribute('data-col', c.college);
+      if(!ok) l.className='dim';
+      if(q&&first){ l.className+=' selHi'; } if(q) first=false;
       var cb=document.createElement('input'); cb.type='checkbox'; cb.className='cls'; cb.value=c.name; cb.checked=checked;
       var sp=document.createElement('span'); sp.textContent=c.name+'（'+C.glCount(c,grade,level)+'人）';
       l.appendChild(cb); l.appendChild(sp); box.appendChild(l);
     });
-    if(!shown){ var d=document.createElement('div'); d.style.cssText='padding:10px;color:#94a3b8;font-size:13px'; d.textContent='没有匹配的班级'; box.appendChild(d); }
-    box.querySelectorAll('input.cls').forEach(function(cb){cb.onchange=function(){ if(cb.checked)clsSel.add(cb.value); else clsSel.delete(cb.value); updateCount(); };});
+    if(!shown){
+      var d=document.createElement('div'); d.style.cssText='padding:10px;color:#94a3b8;font-size:13px';
+      d.textContent = colSel.size===0 ? '请先在左边勾选学院' : '没有匹配的班级';
+      box.appendChild(d);
+    }
+    box.querySelectorAll('input.cls').forEach(function(cb){
+      cb.onchange=function(){
+        if(cb.checked)clsSel.add(cb.value); else clsSel.delete(cb.value);
+        renderCls(); updateCount();
+      };
+    });
+    var sum=filterSummary();
     var info=$('clsInfo');
     if(q){
-      info.innerHTML='找到 <b>'+shown+'</b> 个班级（'+matched+' 个符合当前年级/层次将生成，已选 '+sel+'）'
+      info.innerHTML='找到 <b>'+shown+'</b> 个班级（'+matched+' 个符合当前年级/层次，已选 '+sel+'）'
         +(shown?' <span class="miniBtn" onclick="selectMatched(\'cls\',true)">全选匹配项</span><span class="miniBtn off" onclick="selectMatched(\'cls\',false)">清空匹配项</span>':'');
       if(shown){ var f=box.querySelector('.selHi'); if(f) f.scrollIntoView({block:'nearest'}); }
     } else {
-      info.innerHTML='共 '+OPTS.classes.length+' 个班级，已选 '+clsSel.size;
+      info.innerHTML='当前范围内共 '+shown+' 个班级，已选 '+sel+'（'+C.s(sum.college)+' · '+C.s(sum.level)+'）';
     }
+    // 说明文字随「学院 / 层次 / 年级 / 勾选状态」实时同步
     var hint=$('clsHint');
     if(hint){
-      if(grade || (level && level!=='all')){
-        hint.style.display='block';
-        hint.textContent='已按当前年级 / 层次自动勾选符合条件的班级（'+matched+' 个），其余已取消勾选并置灰。想手动加回，直接勾上即可。';
-      } else {
-        hint.style.display='none';
-      }
+      hint.style.display='block';
+      hint.innerHTML='当前筛选：<b>'+C.s(sum.text)+'</b> —— 范围内共 '+shown+' 个班级，已勾选 '+sel+' 个。'
+        +'<br>切换学院 / 年级 / 层次会自动刷新上面的班级列表与勾选；不符合当前年级 / 层次的班级已置灰，想手动加回直接勾上即可。';
     }
   }
 
@@ -871,17 +1002,29 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   window.selectMatched=function(kind,on){
     if(!OPTS) return;
     var q = kind==='col' ? ($('colSearch').value||'').trim() : ($('clsSearch').value||'').trim();
-    var list = kind==='col' ? Object.keys(OPTS.colleges) : (OPTS.classes||[]).map(function(c){return c.name;});
-    list.forEach(function(name){
-      if(q && name.indexOf(q)<0) return;
-      if(on) (kind==='col'?colSel:clsSel).add(name); else (kind==='col'?colSel:clsSel).delete(name);
-    });
+    if(kind==='col'){
+      Object.keys(OPTS.colleges).forEach(function(k){
+        if(q && k.indexOf(q)<0) return;
+        if(on) colSel.add(k); else colSel.delete(k);
+      });
+      syncSelections();
+    } else {
+      scopeClasses(q).forEach(function(c){
+        if(on) clsSel.add(c.name); else clsSel.delete(c.name);
+      });
+    }
     renderCol(); renderCls(); updateCount();
   };
 
   window.toggleAll=function(which,on){
-    var list = which==='col' ? Object.keys(OPTS.colleges) : (OPTS.classes||[]).map(function(c){return c.name;});
-    list.forEach(function(name){ if(on)(which==='col'?colSel:clsSel).add(name); else (which==='col'?colSel:clsSel).delete(name); });
+    if(!OPTS) return;
+    if(which==='col'){
+      colSel = on ? new Set(Object.keys(OPTS.colleges)) : new Set();
+      syncSelections();
+    } else {
+      var q=($('clsSearch').value||'').trim();
+      clsSel = on ? new Set(scopeClasses(q).map(function(c){return c.name;})) : new Set();
+    }
     renderCol(); renderCls(); updateCount();
   };
 
@@ -1032,9 +1175,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     msg('mergeMsg','busy','正在读取并合并，请稍候…');
     try{
       var r=await C.mergeZip(MERGE_FILES, {includeReports:$('mergeRep').checked});
-      download('档案表成果-合并全部.zip', r.buffer, $('mergeCard'));
+      var mdl=download('档案表成果-合并全部.zip', r.buffer, $('mergeCard'));
       msg('mergeMsg','ok','✅ 合并完成！共收进 '+r.nXlsx+' 个表格文件'+(r.nReports?('、'+r.nReports+' 个报告'):'')+
-        (r.collisions?('，处理了 '+r.collisions+' 处重名'):'')+'，已开始下载「档案表成果-合并全部.zip」。若浏览器提示「已阻止下载」，请点「保留」。');
+        (r.collisions?('，处理了 '+r.collisions+' 处重名'):'')+'，文件「档案表成果-合并全部.zip」已生成。'+
+        (mdl.weak ? '当前浏览器自动下载容易被拦，请点下方蓝色按钮手动保存。' : '已开始下载，若没自动下载请用下方蓝色链接保存。'));
     }catch(err){
       msg('mergeMsg','err','合并失败：'+err.message+'　请把这段提示发给管理员。');
     }finally{ this.disabled=false; }
@@ -1058,8 +1202,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       }else{
         name=prefix+'-成果.zip'; buf=await C.buildZip(res.files);
       }
-      download(name, buf, $('goCard'));
-      msg('gos','ok','✅ 生成完成！共 '+res.picked+' 人 / '+Object.keys(res.classes).length+' 个班，已开始下载「'+name+'」（里面已经分好、包含全部班级文件）。 如果浏览器提示「已阻止下载」，请点「保留」；若没自动下载，用按钮下方的手动链接保存。文件一般在「下载」文件夹里。');
+      var dl=download(name, buf, $('goCard'));
+      msg('gos','ok','✅ 生成完成！共 '+res.picked+' 人 / '+Object.keys(res.classes).length+' 个班，文件「'+name+'」已分好（内含全部班级文件）。'+
+        (dl.weak ? '当前浏览器自动下载容易被拦，请点下方蓝色按钮手动保存。' : '已开始下载，若浏览器提示「已阻止下载」请点「保留」；没自动下载就用下方蓝色链接保存。'));
     }catch(err){
       msg('gos','err','生成失败：'+err.message+'　请把这段提示发给管理员。');
     }finally{
