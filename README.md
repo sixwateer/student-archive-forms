@@ -1,5 +1,7 @@
 # student-archive-forms · 学生档案纸质表生成器
 
+**只想用、不想装环境**：直接打开在线网页版 <https://sixwateer.github.io/student-archive-forms/>（单文件离线运行，名册不上传）；或下载仓库 Release 里的单文件 HTML / exe 交付包。
+
 把一份**学生名册**和一份 **Excel 纸质表模板**，自动转换成可直接打印的分班表格：
 
 - **每个班级一个 sheet**，表头、页脚、字体边框全部沿用你的模板
@@ -10,6 +12,8 @@
 - **先筛选再生成**：按年级、本科/专升本/一起、学院、班级任意组合挑人，不再一股脑全出
 - **成果可一键合并**：散落的十几个学院表、或「本科(9学院).zip + 专升本(8学院).zip」，一条命令合成一个总 ZIP（附合并清单 + 完整性校验），方便整体转发
 - 自带校验脚本：人数、学号集合、班级数、表头页脚、打印参数逐项核对；筛选时自动按同一批学生核对
+- **学院 → 班级严格联动**：勾选某学院后班级列表只出现该院班级，说明文字实时写出当前学院、层次、年级与班级数，不再混入其他学院或残留旧文案
+- **QQ 浏览器也能下载**：自动识别 QQ / 微信 / 手机内核，改用 `data URI` + 醒目的手动保存按钮（附备用链接与重试），避免「0% 下载失败」和 `UUID.bin`；桌面 Edge / Chrome 的自动下载行为不变
 
 既是一套独立命令行工具，也是一个 [Agent Skills](https://agentskills.io) 格式的 skill（`SKILL.md`）。
 
@@ -142,22 +146,26 @@ python scripts/combine.py \
 
 ## 作为 Agent Skill 使用
 
-把整个目录放到 skills 目录即可，例如 WorkBuddy 的 `~/.workbuddy/skills/student-archive-forms/`。
-`SKILL.md` 里写了触发条件、工作流和关键约定；Agent 说一句「按学院分层次做档案表」就会走这套流程。
-`references/environment.md` 记录了在 Agent / PowerShell 环境里调用时的注意事项。
+本仓库同时是一个符合 Agent Skills 规范的 skill 包：`SKILL.md` 只保留核心流程，细节按需从 `references/` 加载（渐进披露）。把整个目录放到 skills 目录即可，例如 WorkBuddy 的 `~/.workbuddy/skills/student-archive-forms/`；也可直接分发 `student-archive-forms.skill`（由 skill-creator 校验并打包的 zip 格式）。
+
+- 调参数前读 `references/parameters.md`
+- Windows 下跑脚本前读 `references/environment.md`
+- 改界面、排查下载或重新打包前读 `references/webapp.md`
+- 要交付给非技术同事时，复制 `assets/操作指引.md`
 
 ## 目录结构
 
 ```
-SKILL.md                       skill 入口（触发条件 + 工作流 + 年级口径 + 交互约定）
+SKILL.md                       skill 入口（name/description + 核心工作流）
 scripts/generate.py            主生成器（全部参数见 --help）
 scripts/verify.py              输出校验器
 scripts/combine.py             把散落成果合并成一个总 ZIP
-scripts/config.example.json    可直接试跑的示例配置
+scripts/config.example.json    可直接试跑的示例配置（虚构数据路径）
 references/parameters.md       参数详解、模板结构要求、A4 列宽算法
-references/environment.md      环境与编码注意事项
-examples/make_demo.py          生成虚构演示数据（不入库）
-操作指引.md                    面向非技术用户的一页纸操作指引
+references/environment.md      Windows 环境与编码注意事项
+references/webapp.md           网页版 / exe 小程序的交互约定、下载兼容与构建流程
+assets/操作指引.md             面向非技术用户的一页纸操作指引
+examples/make_demo.py          生成虚构演示数据（生成的 .xlsx 不入库）
 ```
 
 ## 打印

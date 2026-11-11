@@ -22,6 +22,7 @@
 
   "name_prefix": "示例档案纸质表格",
   "margin_cm": 2.0,
+  "border_style": "thin",
   "note_width": 9.0,
 
   "stats": true,
