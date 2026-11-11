@@ -1,6 +1,6 @@
 # student-archive-forms · 学生档案纸质表生成器
 
-**只想用、不想装环境**：直接打开在线网页版 <https://sixwateer.github.io/student-archive-forms/>（单文件离线运行，名册不上传）；或下载仓库 Release 里的单文件 HTML / exe 交付包。
+**只想用、不想装环境**：直接打开在线网页版 <https://sixwateer.github.io/student-archive-forms/>（单文件离线运行，名册不上传）；或把 `学生档案表生成器-网页版.html` 这个单文件发给同事，双击即用。
 
 把一份**学生名册**和一份 **Excel 纸质表模板**，自动转换成可直接打印的分班表格：
 
