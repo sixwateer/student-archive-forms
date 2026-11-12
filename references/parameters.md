@@ -23,7 +23,7 @@ python scripts/generate.py --config 我的配置.json --group-mode college --mar
 | `--name-prefix` | 名册文件名 | 输出文件名前缀 |
 | `--margin-cm` | 2.0 | A4 四周边距；可打印宽度 = 21 − 2×边距 |
 | `--border-style` | `thin` | 表格实线：`thin` 全细黑线（默认，外框与内线一致）；`medium`/`thick` 外框加粗；`none` 沿用模板边框 |
-| `--note-width` | 9.0 | 备注列目标宽度（列宽单位），有富余时才放宽 |
+| `--note-width` | 13.0 | 备注列目标宽度（列宽单位），默认留出更长手写空白；只影响备注列，有富余时才放宽，不会改变其他列宽与打印缩放 |
 | `--stats` | 关 | 打印 学院×层次 人数与占比 |
 | `--zip-by-level` | 关 | 按层次后缀把生成文件打成 zip |
 | `--exclude` | 空 | 逗号分隔的层次显示名，跳过不生成 |
@@ -128,7 +128,7 @@ python scripts/generate.py --config 我的配置.json --college 商学院 --clas
 ```
 
 按「表头 + 全量数据 + 页脚」的最长字符串算每列需求；若总和超上限，依次压缩
-`备注 → 是否存档 → 序号 → 姓名`（下限为该列表头宽度）；有富余时把备注放宽到 `--note-width`。
+`备注 → 是否存档 → 序号 → 姓名`（下限为该列表头宽度）；有富余时把备注放宽到 `--note-width`（默认 13.0，留出更长手写空白）。只调整备注列，其余列宽与 fitToWidth 缩放比例不变；F/G 两列共用同一组行线，上下边界齐平。
 
 打印参数：A4 纵向、`fitToPage=True`、`fitToWidth=1`、`fitToHeight=0`、水平居中、每页重复第 1 行、
 `print_area = A1:{末列}{页脚末行}`。

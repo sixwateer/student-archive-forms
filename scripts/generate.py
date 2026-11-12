@@ -196,8 +196,13 @@ def apply_style(cell, style, align_center=False):
     cell.number_format = style.get("number_format", "General")
 
 
-def compute_widths(header, column_values, margin_cm, note_min=9.0):
-    """按实际字宽反推列宽，并压进 A4 可打印宽度；备注列尽量留手写空间。"""
+def compute_widths(header, column_values, margin_cm, note_min=13.0):
+    """按实际字宽反推列宽，并压进 A4 可打印宽度；备注列尽量留手写空间。
+
+    只放宽「备注」这一列，其余列宽不动；加宽量受 max_total 限制，
+    不会触发 fitToWidth 整体缩放，因此其他字段位置与打印行为保持不变。
+    F「是否存档」与 G「备注」始终共用同一行线，上下边界齐平。
+    """
     n = len(header)
     need = [need_units(h) for h in header]
     for i, vals in enumerate(column_values):
@@ -402,7 +407,8 @@ def build_parser():
                    choices=["none", "thin", "medium", "thick"],
                    help="表格实线样式：thin=全细黑线（默认，外框与内线一致）；"
                         "medium/thick=外框加粗；none=沿用模板原有边框")
-    p.add_argument("--note-width", type=float, default=9.0, help="备注列目标宽度（列宽单位）")
+    p.add_argument("--note-width", type=float, default=13.0,
+                   help="备注列目标宽度（列宽单位，默认 13.0 留出更长手写空白）；只影响备注列，有富余时才放宽")
     p.add_argument("--stats", action="store_true", help="输出 学院×层次 人数与占比统计")
     p.add_argument("--zip-by-level", action="store_true", help="按层次把生成的文件打成 zip（配合 college-level 模式）")
     p.add_argument("--exclude", default="", help="逗号分隔的层次显示名，生成时跳过")
