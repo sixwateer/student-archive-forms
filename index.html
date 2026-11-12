@@ -126,7 +126,7 @@ summary{cursor:pointer;font-size:15px;color:#2563eb;font-weight:bold;padding:6px
           <div>
             <label class="f">年级</label>
             <select id="grade"></select>
-            <div class="d" style="margin-top:6px;font-size:13px">选具体年级会同时筛数据，并写进文件名。</div>
+            <div class="d" style="margin-top:6px;font-size:13px">选具体年级会按「当前所在级（层次所在年级）」筛班级，并写进文件名。</div>
           </div>
           <div>
             <label class="f">本科 / 专升本</label>
@@ -234,7 +234,7 @@ summary{cursor:pointer;font-size:15px;color:#2563eb;font-weight:bold;padding:6px
           <li><b>选名册</b>：点「选择学生名册」或把 Excel 拖进框里。读完后会出现「名册自检」。</li>
           <li><b>看自检</b>：红字＝必须先修名册（如重复学号）；黄字＝提醒；绿字＝可放心生成。</li>
           <li><b>挑数据</b>：默认全选。<br>
-            · <b>年级</b>：选具体「X级」按入学年份/届别筛；选「全部年级」只按下面条件筛。<br>
+            · <b>年级</b>：选具体「X级」按<b>当前所在级（层次所在年级）</b>筛；选「全部年级」只按下面条件筛。<br>
             · <b>层次</b>：本科 / 专升本（专科）/ 一起出。<br>
             · <b>学院 / 班级</b>：在框里输入关键字（如「机器人」「计算机」）秒搜；搜到后点「全选匹配项」一键勾上。</li>
           <li><b>看实时统计</b>：下方显示「本次会生成 X 人 / Y 个班级的表」，选错马上能看出。</li>
@@ -355,9 +355,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   var FOOTER = ['应收        份', '实收        份', '接收人：', '移交人：', '核查人：', '时间：'];
   var LEVEL_MAP = { '普通本科': '本科', '专升本': '专升本' };
   var LEVEL_ORDER = { '本科': 0, '专升本': 1 };
-  // 「X 级」= 入学年份（入学届别）。名册里「当前所在级」往往同一年级、无法区分届别，
-  // 故优先用「入学年份」作为筛选年级，缺失时再退回「当前所在级 / 年级」
-  var GRADE_PRIORITY = ['入学年份', '当前所在级', '年级', '所在级'];
+  // 「X 级」= 层次所在年级，即名册的「当前所在级」。班级名里的年份与它 100% 一致；
+  // 「入学年份」会因留级 / 转专业在一个班里混出多个值（本次全校名册 847 个班中 318 个混年份），
+  // 用它当年级会把班级误标到别的届、并漏掉纯留级生组成的班级，故不作为年级来源。
+  var GRADE_PRIORITY = ['层次所在年级', '当前所在级', '年级', '所在级'];
   var INVALID_SHEET = /[\[\]:*?\/\\]/g;
 
   function s(v) { return v === null || v === undefined ? '' : String(v).trim(); }
@@ -449,11 +450,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   }
 
   function filterRows(rows, sel) {
+    // 班级字段是归属唯一权威：只要某班被选中，原表格里属于该班的全部学生
+    // （含留级 / 转专业学生）都必须归入该班，不得按年级二次过滤把同一个班拆开。
+    // 年级只用于决定「展示 / 自动勾选哪些班级」；仅在没有明确班级选择时才按年级取数。
+    var hasClasses = !!(sel.classes && sel.classes.length);
     return rows.filter(function (r) {
-      if (sel.grade && r.grades.indexOf(sel.grade) < 0) return false;
       if (sel.level && sel.level !== 'all' && r.level !== sel.level) return false;
       if (sel.colleges && sel.colleges.length && sel.colleges.indexOf(r.college) < 0) return false;
-      if (sel.classes && sel.classes.length && sel.classes.indexOf(r.cls) < 0) return false;
+      if (hasClasses && sel.classes.indexOf(r.cls) < 0) return false;
+      if (!hasClasses && sel.grade && r.grades.indexOf(sel.grade) < 0) return false;
       return true;
     });
   }
@@ -1071,8 +1076,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     });
     // 年级
     var hasGrade = opts.grades && opts.grades.length;
-    if(!hasGrade){ out.push({lvl:'info', text:'名册里没有可用的年级列，年级下拉只有「全部年级」；如需按届别筛，请在名册加「入学年份」列。'}); }
-    else { out.push({lvl:'info', text:'年级按「入学年份 / 当前所在级」识别，可选：'+opts.grades.join('、')+'。'}); }
+    if(!hasGrade){ out.push({lvl:'info', text:'名册里没有可用的年级列，年级下拉只有「全部年级」；如需按年级筛，请在名册加「当前所在级」列。'}); }
+    else { out.push({lvl:'info', text:'年级按「当前所在级（层次所在年级）」识别，可选：'+opts.grades.join('、')+'。'}); }
     var ncol=Object.keys(opts.colleges).length, ncls=opts.classes.length;
     out.push({lvl:'info', text:'共 '+total+' 人，分布在 '+ncol+' 个学院 / '+ncls+' 个班级。'});
     if(!out.some(function(w){return w.lvl==='error';})) out.push({lvl:'ok', text:'✅ 名册自检通过，可以直接生成。'});
