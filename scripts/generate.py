@@ -327,11 +327,15 @@ def year4(v):
 
 
 def grade_columns(df, spec):
-    """确定年级列：显式指定优先，否则自动探测常见列名（可多列）。"""
+    """确定年级列：显式指定优先，否则按「层次所在年级」口径自动探测。
+
+    「入学年份」不作为年级来源：留级 / 转专业会让同一个班混出多个入学年份，
+    用它筛年级会把班级误标到别的届，并在生成时把班里的留级生剔掉。
+    """
     if spec:
         return [c.strip() for c in str(spec).split(",")
                 if c.strip() and c.strip() in df.columns]
-    return [c for c in ("当前所在级", "年级", "入学年份", "所在级") if c in df.columns]
+    return [c for c in ("层次所在年级", "当前所在级", "年级", "所在级") if c in df.columns]
 
 
 def show_filters(args):
@@ -403,9 +407,9 @@ def build_parser():
     p.add_argument("--zip-by-level", action="store_true", help="按层次把生成的文件打成 zip（配合 college-level 模式）")
     p.add_argument("--exclude", default="", help="逗号分隔的层次显示名，生成时跳过")
     p.add_argument("--grade", default="", dest="grade",
-                   help="年级，如 2025 或 2025级；名册有年级列时按该年级筛数据，并自动写进文件名")
+                   help="年级，如 2025 或 2025级；按「当前所在级（层次所在年级）」筛班级，并自动写进文件名")
     p.add_argument("--grade-column", default="", dest="grade_column",
-                   help="年级列名，逗号分隔可写多个；留空自动探测 当前所在级/年级/入学年份")
+                   help="年级列名，逗号分隔可写多个；留空自动探测 层次所在年级/当前所在级/年级/所在级（不含入学年份）")
     p.add_argument("--level", default="", dest="level_filter",
                    help="只保留的层次显示名，逗号分隔，如 本科 / 专升本 / 本科,专升本；留空=全部")
     p.add_argument("--college", default="", dest="college_filter",
@@ -516,15 +520,6 @@ def run(args, rep):
     gcols = grade_columns(df, args.grade_column)
     if g4:
         conditions.append("年级=%s级" % g4)
-        if gcols:
-            mask = pd.Series(False, index=df.index)
-            for c in gcols:
-                mask |= df[c].map(year4).eq(g4)
-            before = len(df)
-            df = df[mask].copy()
-            rep("按年级筛选:", g4, "级 | 年级列:", gcols, f"| 剔除 {before-len(df)} 行")
-        else:
-            rep("按年级筛选:", g4, "级 | ⚠ 名册无年级列，只用于命名，不筛数据")
 
     lv_keep = split_values(args.level_filter)
     if lv_keep and not any(x in ("全部", "all", "ALL") for x in lv_keep):
@@ -547,6 +542,19 @@ def run(args, rep):
         before = len(df)
         df = df[df["_cls"].isin(cls_keep)].copy()
         rep("按班级筛选:", cls_keep, f"| 剔除 {before-len(df)} 行")
+
+    # 年级只用于决定「哪些班级入选」与文件命名。按班级字段筛选后，该班在原表格里的
+    # 全部学生（含留级 / 转专业）必须一起进表，不得再按年级把同一个班拆开。
+    if g4 and not cls_keep:
+        if gcols:
+            mask = pd.Series(False, index=df.index)
+            for c in gcols:
+                mask |= df[c].map(year4).eq(g4)
+            before = len(df)
+            df = df[mask].copy()
+            rep("按年级筛选:", g4, "级 | 年级列:", gcols, f"| 剔除 {before-len(df)} 行")
+        else:
+            rep("按年级筛选:", g4, "级 | ⚠ 名册无年级列，只用于命名，不筛数据")
 
     ex_ids = split_values(args.exclude_ids)
     if str(args.exclude_ids).strip().startswith("@"):
