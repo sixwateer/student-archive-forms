@@ -765,20 +765,17 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return 'application/octet-stream';
   }
   function fmtSize(n){ return n>=1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(n/1024))+' KB'; }
-  function weakBrowser(){
-    var ua=navigator.userAgent||'';
-    if(/MQQBrowser|QQBrowser|MicroMessenger|WeChat|TencentTraveler|QQ\//i.test(ua)) return true;
-    if(/Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(ua)) return true;
-    if(location.protocol==='content:') return true;
-    return false;
-  }
-  function toDataURL(blob){
-    return new Promise(function(res,rej){
-      var fr=new FileReader();
-      fr.onload=function(){ res(fr.result); };
-      fr.onerror=function(){ rej(new Error('读取文件失败')); };
-      fr.readAsDataURL(blob);
-    });
+  // 环境探测：哪些环境根本不能下载（微信 / QQ 内置浏览器、安卓 content:// 网页视图）
+  function envInfo(){
+    var ua=navigator.userAgent||'', p=location.protocol;
+    var isWeChat=/MicroMessenger/i.test(ua);
+    var isQQApp=/MQQBrowser|QQBrowser/i.test(ua);
+    var isContent=(p==='content:');
+    var isIOS=/iPhone|iPad|iPod/i.test(ua);
+    var isMobile=/Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(ua);
+    // 这些环境没有可用下载器：微信/QQ 内置浏览器完全拦截下载；安卓 content:// 网页视图同样不让存文件
+    var inApp = isWeChat || isContent;
+    return {ua:ua,isWeChat:isWeChat,isQQApp:isQQApp,isContent:isContent,isIOS:isIOS,isMobile:isMobile,inApp:inApp};
   }
   function assertBuffer(buf,name){
     if(!buf || !buf.byteLength) throw new Error('生成的文件为空，请重新点一次生成。');
@@ -797,40 +794,55 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     host.appendChild(box);
     return box;
   }
-  function renderDlBox(box,d,primary,weak){
+  function renderDlBox(box,d,env){
     box.innerHTML='';
     var head=document.createElement('div');
     head.innerHTML='<b>✅ 文件已生成：'+C.s(d.name)+'</b>（'+fmtSize(d.blob.size)+'）';
     box.appendChild(head);
-    var tip=document.createElement('div');
-    tip.style.cssText='margin-top:4px;color:'+(weak?'#b45309':'#475569');
-    tip.textContent = weak
-      ? '当前是 QQ / 微信 / 手机浏览器，自动下载容易被拦或存成 .bin，请手动点下面的按钮保存；若仍失败，点右上角「···」→ 用系统浏览器打开后再生成一次。保存后若文件名不对，请改成：'+d.name
-      : '文件一般在「下载」文件夹里。若浏览器提示「已阻止下载」，请点「保留」。';
-    box.appendChild(tip);
-    var a=document.createElement('a');
-    a.setAttribute('data-primary','1');
-    a.href=primary; a.download=d.name;
-    a.textContent=weak?'⬇ 点这里保存文件':'👉 如果没自动下载，点这里手动保存';
-    a.style.cssText='display:inline-block;margin:10px 8px 0 0;padding:10px 16px;border-radius:9px;background:#2563eb;color:#fff;font-weight:bold;text-decoration:none';
-    box.appendChild(a);
-    var altHref = primary.indexOf('data:')===0 ? d.url : d.dataUrl;
-    if(altHref && altHref!==primary){
-      var alt=document.createElement('a');
-      alt.href=altHref; alt.download=d.name;
-      alt.textContent=primary.indexOf('data:')===0?'备用：标准下载':'备用：兼容下载';
-      alt.style.cssText='color:#1d4ed8;font-weight:bold;margin-left:8px';
-      box.appendChild(alt);
+
+    if(env.inApp){
+      // 微信 / 安卓内置浏览器：文件下载被完全拦截，只能引导到系统浏览器
+      var tip=document.createElement('div');
+      tip.style.cssText='margin-top:6px;color:#b91c1c;font-weight:bold';
+      tip.innerHTML = (env.isWeChat?'当前是微信内置浏览器':'当前是无法保存文件的网页视图')
+        + '，会拦截文件下载。请点右上角「···」→「在浏览器打开 / 用系统浏览器打开」，'
+        + '在新开的浏览器里重新点一次「生成」，即可正常下载。';
+      box.appendChild(tip);
+      var la=document.createElement('a');
+      la.href=d.url; la.target='_blank'; la.rel='noopener';
+      la.textContent='👉 尝试在新窗口打开文件';
+      la.style.cssText='display:inline-block;margin:10px 8px 0 0;padding:10px 16px;border-radius:9px;background:#2563eb;color:#fff;font-weight:bold;text-decoration:none';
+      box.appendChild(la);
+      return;
     }
+
+    var tip=document.createElement('div');
+    tip.style.cssText='margin-top:6px;color:#475569';
+    tip.textContent='点击下方蓝色按钮，即可把文件保存到「下载」文件夹。若浏览器弹出「危险 / 已拦截 / 已保护」之类的提示，那是误报——文件是在你本机实时生成的，不是从网上下载的，请点「保留 / 仍然保存」即可。';
+    box.appendChild(tip);
+
+    // 主按钮：用户点击 → blob <a download>，属于用户手势，全平台最不容易被拦
+    var a=document.createElement('a');
+    a.href=d.url; a.download=d.name; a.rel='noopener';
+    if(env.isIOS) a.target='_blank';
+    a.textContent='⏬ 点此保存到下载目录';
+    a.style.cssText='display:inline-block;margin:10px 8px 0 0;padding:11px 18px;border-radius:9px;background:#2563eb;color:#fff;font-weight:bold;text-decoration:none;font-size:15px';
+    box.appendChild(a);
+
+    // 备用：在新标签页打开（iOS Safari 不认 download 属性，用它来「存储到文件」）
+    var open=document.createElement('a');
+    open.href=d.url; open.target='_blank'; open.rel='noopener';
+    open.textContent='🌐 仍不行？在新标签页打开后另存为';
+    open.style.cssText='display:inline-block;margin:10px 0 0 0;padding:10px 14px;border-radius:9px;background:#fff;color:#1d4ed8;border:1px solid #93c5fd;font-weight:bold;text-decoration:none';
+    box.appendChild(open);
+
     var retry=document.createElement('button');
-    retry.setAttribute('data-retry','1');
-    retry.textContent='🔄 重新下载';
+    retry.textContent='🔄 重新生成下载';
     retry.style.cssText='margin:10px 0 0 10px;padding:7px 12px;border:1px solid #94a3b8;border-radius:8px;background:#fff;cursor:pointer;font-size:13px';
     retry.onclick=function(){ download(d.name,d.buf,d.mount); };
     box.appendChild(retry);
   }
-  // 页面关闭时才回收 blob URL：QQ 浏览器的下载管理器是异步取数据的，
-  // 过早 revokeObjectURL 会导致 0% 失败 / 只存下 .bin
+  // 页面关闭时才回收 blob URL（过早 revokeObjectURL 会让「在新标签页打开」失效）
   window.addEventListener('beforeunload',function(){
     OBJ_URLS.forEach(function(u){ try{URL.revokeObjectURL(u);}catch(e){} });
   });
@@ -839,28 +851,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     assertBuffer(buf,name);
     var mime=mimeOf(name);
     var blob=new Blob([buf],{type:mime});
-    var weak=weakBrowser();
     var url=URL.createObjectURL(blob); OBJ_URLS.push(url);
-    var d={name:name,buf:buf,blob:blob,mime:mime,url:url,mount:mount||document.body,weak:weak};
+    var env=envInfo();
+    var d={name:name,buf:buf,blob:blob,mime:mime,url:url,mount:mount||document.body,weak:env.inApp};
     LAST_DL=d;
     var box=dlBox(d.mount);
-    var render=function(primary){ renderDlBox(box,d,primary,weak); };
-
-    if(weak){
-      // 兼容模式：不自动触发隐藏链接（避免产生下载失败项和 UUID.bin）
-      if(blob.size<=2*1024*1024){
-        toDataURL(blob).then(function(du){ d.dataUrl=du; render(du); })
-                       .catch(function(){ render(url); });
-      } else { render(url); }
-    } else {
-      // 桌面浏览器：保持原来的自动下载
-      var a=document.createElement('a');
-      a.href=url; a.download=name; a.style.display='none';
-      document.body.appendChild(a); a.click();
-      setTimeout(function(){ if(a.parentNode)a.parentNode.removeChild(a); },10000);
-      render(url);
-    }
-    return {weak:weak,size:blob.size};
+    renderDlBox(box,d,env);
+    return {weak:env.inApp, inApp:env.inApp, size:blob.size};
   }
 
   function optHtml(v, label){ return '<option value="'+v+'">'+label+'</option>'; }
@@ -1192,7 +1189,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       var mdl=download('档案表成果-合并全部.zip', r.buffer, $('mergeCard'));
       msg('mergeMsg','ok','✅ 合并完成！共收进 '+r.nXlsx+' 个表格文件'+(r.nReports?('、'+r.nReports+' 个报告'):'')+
         (r.collisions?('，处理了 '+r.collisions+' 处重名'):'')+'，文件「档案表成果-合并全部.zip」已生成。'+
-        (mdl.weak ? '当前浏览器自动下载容易被拦，请点下方蓝色按钮手动保存。' : '已开始下载，若没自动下载请用下方蓝色链接保存。'));
+        (mdl.weak ? '微信/QQ 内置浏览器会拦截下载：请点右上角「···」→ 用系统浏览器打开，再重新点一次生成。' : '请点下方蓝色按钮「⏬ 点此保存到下载目录」。若提示「危险/已拦截」属误报，点「保留」即可。'));
     }catch(err){
       msg('mergeMsg','err','合并失败：'+err.message+'　请把这段提示发给管理员。');
     }finally{ this.disabled=false; }
@@ -1218,7 +1215,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       }
       var dl=download(name, buf, $('goCard'));
       msg('gos','ok','✅ 生成完成！共 '+res.picked+' 人 / '+Object.keys(res.classes).length+' 个班，文件「'+name+'」已分好（内含全部班级文件）。'+
-        (dl.weak ? '当前浏览器自动下载容易被拦，请点下方蓝色按钮手动保存。' : '已开始下载，若浏览器提示「已阻止下载」请点「保留」；没自动下载就用下方蓝色链接保存。'));
+        (dl.weak ? '微信/QQ 内置浏览器会拦截下载：请点右上角「···」→ 用系统浏览器打开，再重新点一次生成。' : '请点下方蓝色按钮「⏬ 点此保存到下载目录」。若提示「危险/已拦截」属误报，点「保留」即可。'));
     }catch(err){
       msg('gos','err','生成失败：'+err.message+'　请把这段提示发给管理员。');
     }finally{
