@@ -537,6 +537,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     });
     FOOTER.forEach(function (t) { need[3] = Math.max(need[3], textWidth(t)); });
     var widths = need.map(function (v) { return Math.min(28, v + 2); });
+    // 「备注」列留更长的手写空白：只调这一列，其余列宽保持原值；
+    // 加宽量受总宽上限 90 约束，不会触发整体缩放而改变其他字段位置。
+    // F「是否存档」与 G「备注」仍共用同一组行线，上下边界齐平、边缘对齐。
+    var noteIdx = HEADER.indexOf('备注');
+    if (noteIdx >= 0) {
+      var others = 0;
+      for (var wi = 0; wi < widths.length; wi++) { if (wi !== noteIdx) others += widths[wi]; }
+      widths[noteIdx] = Math.max(widths[noteIdx], Math.min(13, 90 - others));
+    }
     var sum = widths.reduce(function (a, b) { return a + b; }, 0);
     if (sum > 90) { var k = 90 / sum; widths = widths.map(function (v) { return Math.max(6, Math.round(v * k)); }); }
     ws.columns = widths.map(function (w) { return { width: w }; });
